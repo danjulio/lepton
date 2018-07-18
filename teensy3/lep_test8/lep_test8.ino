@@ -188,22 +188,29 @@ void ConfigureAgcState() {
     (void) lep.LEP_SetAgcEnableState(portDescP, LEP_AGC_DISABLE);
     (void) lep.LEP_SetRadEnableState(portDescP, LEP_RAD_ENABLE);
   } else {
-    (void) lep.LEP_SetAgcEnableState(portDescP, LEP_AGC_ENABLE);
-    (void) lep.LEP_SetRadEnableState(portDescP, LEP_RAD_DISABLE);
+    //(void) lep.LEP_SetAgcEnableState(portDescP, LEP_AGC_ENABLE);
+    //(void) lep.LEP_SetRadEnableState(portDescP, LEP_RAD_DISABLE);
+    (void) lep.LEP_SetAgcEnableState(portDescP, LEP_AGC_DISABLE);
     switch (agcSelector) {
       case 1:
         (void) lep.LEP_SetAgcPolicy(portDescP, LEP_AGC_LINEAR);
         (void) lep.LEP_SetAgcCalcEnableState(portDescP, LEP_AGC_ENABLE);
+        break;
       case 2:
         (void) lep.LEP_SetAgcPolicy(portDescP, LEP_AGC_HEQ);
         (void) lep.LEP_SetAgcCalcEnableState(portDescP, LEP_AGC_ENABLE);
+        break;
       case 3:
         (void) lep.LEP_SetAgcPolicy(portDescP, LEP_AGC_LINEAR);
         (void) lep.LEP_SetAgcCalcEnableState(portDescP, LEP_AGC_DISABLE);
+        break;
       case 4:
         (void) lep.LEP_SetAgcPolicy(portDescP, LEP_AGC_HEQ);
         (void) lep.LEP_SetAgcCalcEnableState(portDescP, LEP_AGC_DISABLE);
+        break;
     }
+    (void) lep.LEP_SetAgcEnableState(portDescP, LEP_AGC_ENABLE);
+    (void) lep.LEP_SetRadEnableState(portDescP, LEP_RAD_DISABLE);
   }
 }
 
