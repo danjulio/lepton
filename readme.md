@@ -8,6 +8,8 @@ Code for a test platform based on the PJRC Teensy 3 board.  Also includes a port
 ### leptonic-vsync
 A version of Damien Walsh's leptonic server program for the Raspberry Pi that uses VSYNC and an ISR running in user-space on the Pi to sync the Lepton's VoSPI data.
 
+![leptonic_vsync](pictures/leptonic_vsync.png)
+
 #### Hardware
 
 ![Pi Thermal Imaging Camera](pictures/pi_lepton.png)
