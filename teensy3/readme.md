@@ -16,6 +16,7 @@ The project is documented at [hackaday.io](https://hackaday.io/project/159615-le
 4. lep_test7 - A test sketch demonstrating the Lepton's internal color map LUTs.  AGC is enabled as well as 24-bit RGB output.  This data is then reduced to 16-bits for the LCD display without using any color maps on the Teensy.
 5. lep_test8 - A test sketch designed to allow comparison of the Lepton's built-in AGC modes (HEQ and linear) with a simple linear transformation done in code with the 16-bit temperature data.
 6. lep_test9 - A test sketch designed to allow investigating the emissivity setting (RAD Flux Linear Parameter) and comparing the spot meter output (via I2C) with the raw pixel data temperature.
-7. teensy_schematic.pdf - Shows the connections for the test platform including the soft power control and battery charging/boost converter circuitry.
+7. lep_test10 - A combination of test5 and test9 enabling AGC (with HEQ mode), spot meter readout of center temperature and ability to set emmissivity.  Code has been ported to Adafruit's LCD shield (CS# on D10, DC on D9) and uses latest Adafruit GFX and ILI9341 Arduino libraries.
+8. teensy_schematic.pdf - Shows the connections for the test platform including the soft power control and battery charging/boost converter circuitry.
 
 This code is "as-is" and may contain bugs (especially the library as it has a lot of functions I haven't tested).  Please let me know if you have a question or find a bug.
