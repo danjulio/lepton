@@ -1,0 +1,139 @@
+/*
+ * SPI-based ILI9341 LCD device tree for a generic LCD display using the Beaglebone black SPI0.
+ *
+ * Build
+ *  dtc -O dtb -o TFT-ILI9348-SPI0.dtbo -b 0 -@ TFT-ILI9348-SPI0.dts
+ *
+ * Install
+ *  sudo cp TFT-ILI9348-SPI0.dtbo /lib/firmware
+ *  edit /boot/uEnv.txt as root and replace the ###Custom Cape line as shown below
+ *
+ *   ###Custom Cape
+ *   dtb_overlay=/lib/firmware/TFT-ILI9348-SPI0.dtbo
+ *
+ * Reboot and you should be rewarded by a lit LCD and a /dev/fb0 entry for your pleasure.
+ *
+ * Based on the work by:
+ *
+ * Copyright (C) 2015 Bruce Wilson
+ * Electrodragon 2.2" LCD SPI TFT
+ * http://www.electrodragon.com/product/eds-tft-lcd-lcm-spi-interface-variable1-82-2/
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ */
+/dts-v1/;
+/plugin/;
+/ {
+compatible = "ti,beaglebone", "ti,beaglebone-black";
+
+/* identification */
+part-number = "TFT-ILI9348-SPI0";
+
+/* version */
+version = "00A0";
+
+/* stat the resources this cape uses */
+exclusive-use = 
+	/* the pin header uses */
+	"P9.22",	/* spi0_sclk */
+	"P9.21",	/* spi0_d0 - MISO */
+	"P9.18",	/* spi0_d1 - MOSI */
+	"P9.17",	/* spi0_cs0 */
+	"P9.15",	/* gpio1_16 - reset */
+	"P9.12",	/* gpio1_28 - dc */
+	"P9.14",	/* ehrpwm1a - backlight */
+	/* the hardware ip uses */
+	"gpio1_16",
+	"gpio1_28",
+	"ehrpwm1a",
+	"spi0";
+
+fragment@0 {
+	target = <&am33xx_pinmux>;
+	__overlay__ {
+		spi0_pins_s0: spi0_pins_s0 {
+			pinctrl-single,pins = <
+				0x150 0x30	/* P9_22: spi0_sclk, INPUT_PULLUP | MODE0 */
+				0x154 0x30	/* P9_21: spi0_d0 MISO, INPUT_PULLUP | MODE0 */
+				0x158 0x10	/* P9_18: spi0_d1 MOSI, OUTPUT_PULLUP | MODE0 */
+				0x15c 0x10	/* P9_17: spi0_cs0, OUTPUT_PULLUP | MODE0 */
+			>;
+		};
+
+		lcd_ctrl_pinmux: lcd_ctrl_pins {
+			pinctrl-single,pins = <
+				0x040 0x17	/* P9_15: gpio1_16 reset, OUTPUT_PULLUP | MODE7 */
+				0x078 0x17	/* P9_12: gpio1_28 DC, OUTPUT_PULLUP | MODE7 */
+			>;
+		};
+
+		pwm_bl_pins: pinmux_pwm_bl_pins {
+			pinctrl-single,pins = <
+				0x48 0x06	/* P9_14: ehrpwm1a, MODE6 */
+			>;
+		};
+	};
+};
+
+fragment@1 {
+	target = <&spi0>;
+	__overlay__ {
+		status = "okay";
+		pinctrl-names = "default";
+		pinctrl-0 = <&spi0_pins_s0>;
+
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		lcd@0{
+			compatible = "fb_ili9341";
+			reg = <0>;
+
+			pinctrl-names = "default";
+			pinctrl-0 = <&lcd_ctrl_pinmux>;
+
+			spi-max-frequency = <25000000>;
+			rotate = <90>;
+			bgr;
+			fps = <30>;
+			buswidth = <8>;
+			reset-gpios = <&gpio1 16 0>;
+			dc-gpios = <&gpio1 28 0>;
+
+			debug = <3>;
+		};
+	};
+};
+
+fragment@2 {
+	target = <&epwmss1>;
+	__overlay__ {
+		status = "okay";
+	};
+};
+
+fragment@3 {
+	target = <&ehrpwm1>;
+	__overlay__ {
+		status = "okay";
+	};
+};
+
+fragment@4 {
+	target = <&ocp>;
+	__overlay__ {
+		backlight {
+			compatible = "pwm-backlight";
+			pinctrl-names = "default";
+			pinctrl-0 = <&pwm_bl_pins>;
+			status = "okay";
+
+			pwms = <&ehrpwm1 0 500000 0>;
+			pwm-names = "backlight";
+			brightness-levels = <0 4 8 16 32 64 128 255>;
+			default-brightness-level = <7>; /* index to the array above */
+		};
+	};
+};
+};

@@ -2,6 +2,9 @@
 
 This repository contains code and libraries developed for a FLIR Lepton 3.5 Thermal imaging camera [module](https://store.groupgets.com/collections/flir-lepton-accessories/products/flir-lepton-breakout-board).
 
+### Beaglebone
+Code for the Beaglebone platform.  Look in the directory for more information about the various projects there.
+
 ### Teensy3
 Code for a test platform based on the PJRC Teensy 3 board.  Also includes a port of FLIR's LeptonSDKEmb32OEM CCI to the Arduino platform.
 

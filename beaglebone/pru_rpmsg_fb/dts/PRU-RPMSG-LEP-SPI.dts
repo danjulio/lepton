@@ -1,0 +1,80 @@
+/*
+ *
+ * Copyright (C) 2018 Dan Julio (dan@danjuliodesigns.com)
+ *
+ * Beaglebone Black PRU-based SPI engine for leptonic Lepton3.5 display
+ *
+ * Build: 
+ *   dtc -O dtb -o PRU-RPMSG-LEP-SPI.dtbo -b 0 -@ PRU-RPMSG-LEP-SPI.dts
+ *
+ * Install:
+ *   sudo cp PRU-RPMSG-LEP-SPI.dtbo /lib/firmware
+ *   edit /boot/uEnv.txt as root and change one of the "Additional custom capes"
+ *    overlay entries as shown below.
+ *
+ *   ###Additional custom capes
+ *   uboot_overlay_addr4=/lib/firmware/PRU-RPMSG-LEP-SPI.dtbo
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+*/
+/dts-v1/;
+/plugin/;
+/ {
+	compatible = "ti,beaglebone", "ti,beaglebone-black";
+
+	/* identification */
+	part-number = "PRU-RPMSG-LEP-SPI";
+
+	/* version */
+	version = "00A0";
+
+	/* stat the resources this cape uses */
+	exclusive-use = 
+		/* the pin header uses */
+		"P8.12",	/* PRU0 SCLK */
+		"P9.27",	/* PRU0 MISO */
+		"P9.30",	/* PRU0 CS0 */
+		"P9.31",	/* PRU0 Diagnostic LED */
+		"P8.45";	/* PRU1 Diagnostic LED */
+
+	fragment@0 {
+		target = <&am33xx_pinmux>;
+		__overlay__ {
+			pru_spi_pins: pru_spi_pins {
+				pinctrl-single,pins = <
+					0x030 0x06	/* P8_12: pr1_pru0_pru_r30_14, OUTPUT_PULLDOWN | MODE6 */
+					0x1a4 0x26	/* P9_27: pr1_pru0_pru_r31_5, INPUT_PULLDOWN | MODE6 */
+					0x198 0x05	/* P9_30: pr1_pru0_pru_r30_2, OUTPUT_PULLDOWN | MODE5 */
+				>;
+			};
+
+			pru_diag_led_pins: pru_diag_led_pins {
+				pinctrl-single,pins = <
+					0x190 0x05	/* P9_31: pr1_pru0_pru_r30_0, OUTPUT_PULLDOWN | MODE5 */
+					0x0A0 0x05	/* P8_45: pr1_pru1_pru_r30_0, OUTPUT_PULLDOWN | MODE5 */
+				>;
+			};
+		};
+	};
+
+	fragment@1 {
+		target = <&ocp>;
+		__overlay__ {
+			pru_spi_pinmux {
+				compatible = "bone-pinmux-helper";
+				status = "okay";
+				pinctrl-names = "default";
+				pinctrl-0 = <&pru_spi_pins>;
+			};
+
+			pru_diag_led_pinmux {
+				compatible = "bone-pinmux-helper";
+				status = "okay";
+				pinctrl-names = "default";
+				pinctrl-0 = <&pru_diag_led_pins>;
+			};
+		};
+	};
+};

@@ -1,0 +1,9 @@
+gen/pru0_main.object: pru0_main.c
+gen/pru0_main.object: /usr/share/ti/cgt-pru//include/stdint.h
+gen/pru0_main.object: /usr/lib/ti/pru-software-support-package/include/am335x/pru_cfg.h
+gen/pru0_main.object: /usr/lib/ti/pru-software-support-package/include/am335x/pru_ctrl.h
+gen/pru0_main.object: pru_common.h
+gen/pru0_main.object: resource_table_0.h
+gen/pru0_main.object: /usr/share/ti/cgt-pru//include/stddef.h
+gen/pru0_main.object: /usr/lib/ti/pru-software-support-package/include/rsc_types.h
+gen/pru0_main.object: /usr/lib/ti/pru-software-support-package/include/pru_types.h
