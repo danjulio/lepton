@@ -2,7 +2,7 @@
 
 ![rpmsg_pru data flow diagram](../pictures/pru_rpmsg_fb.png)
 
-This repository contains PRU firmware and several applications using it to read data from the FLIR Lepton 3.5.  This implementation uses both PRUs and the rpmsg facility to communciate complete frames to a user application.  It enables AGC in the Lepton in order to reduce the frame size to 19200 bytes.  The two PRUs communicate using a circular buffer in the 12K shared memory block.  Since the circular buffer is smaller than a frame, the code's timing is such that after the pushing PRU (0) indicates valid data, the popping PRU (1) extracts data at a rate that never gets ahead of the pushing PRU or allows it to push data before its extracted.  This is the power of PRU real-time programming!  That, and the fact that the whole process consumes less than 2% of the main processor's time.
+This directory contains PRU firmware and several applications using it to read data from the FLIR Lepton 3.5.  This implementation uses both PRUs and the rpmsg facility to communciate complete frames to a user application.  It enables AGC in the Lepton in order to reduce the frame size to 19200 bytes.  The two PRUs communicate using a circular buffer in the 12K shared memory block.  Since the circular buffer is smaller than a frame, the code's timing is such that after the pushing PRU (0) indicates valid data, the popping PRU (1) extracts data at a rate that never gets ahead of the pushing PRU or allows it to push data before its extracted.  This is the power of PRU real-time programming!  That, and the fact that the whole process consumes less than 2% of the main processor's time.
 
 ![rpmsg_pru data flow diagram](../pictures/pru_rpmsg.png)
 
@@ -107,7 +107,7 @@ Also change the kernel boot parameters so that it won't start a console on the f
 cmdline=coherent_pool=1M net.ifnames=0 quiet vt.global_cursor_default=0
 ```
 
-####Reboot the BBB
+#### Reboot the BBB
 
 You should see both the LCD backlight and both cape LEDs light indicating that the OS successfully loaded the device tree files.  You can also see if the kernel successfully configured the LCD frame buffer using ```dmesg```.  You will also see a ```/dev/fb0``` device file.
 
@@ -277,7 +277,7 @@ Finished building project: firmware
 ************************************************************
 ```
 
-Stop the PRUs and copy the firmware to ```/lib/firmware``` as shown above.  Then restart the PRUs to execute your new firwmare.
+Stop the PRUs and copy the firmware to ```/lib/firmware``` as shown above.  Then restart the PRUs to execute your new firmware.
 
 ```
 echo "stop" > /sys/class/remoteproc/remoteproc1/state
