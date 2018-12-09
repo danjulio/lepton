@@ -179,16 +179,16 @@ void setup() {
       }
     }
 
-    if (lep.LEP_SetRadEnableState(portDescP, LEP_RAD_DISABLE) != LEP_OK) {
-      tft.println("Set RAD Disable failed");
+    if (lep.LEP_SetRadTLinearEnableState(portDescP, LEP_RAD_DISABLE) != LEP_OK) {
+      tft.println("Set TLinear Disable failed");
       success = false;
     } else {
       LEP_RAD_ENABLE_E radEnable;
-      if (lep.LEP_GetRadEnableState(portDescP, &radEnable) != LEP_OK) {
-        tft.println("Get RAD Enable failed");
+      if (lep.LEP_GetRadTLinearEnableState(portDescP, &radEnable) != LEP_OK) {
+        tft.println("Get TLinear Enable failed");
         success = false;
       } else {
-        tft.printf("RAD Enable = %d\n", (int) radEnable);
+        tft.printf("TLinear Enable = %d\n", (int) radEnable);
       }
     }
     
