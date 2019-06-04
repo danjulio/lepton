@@ -165,7 +165,6 @@ void init_capture()
 	cur_segment = 0;   /* setup to receive segment 1 in packet 20 as first valid segment */
 	cur_packet = 59;   /* setup to receive packet 0 as first valid packet */
 	cur_count = 0;
-	lep_resync_count = 0;
 }
 
 
@@ -330,6 +329,7 @@ void main()
 				run_state = RUN_STATE_DATA;
 				init_capture();
 				init_timer();
+				lep_resync_count = 0;
 
 				/* Assert CS */
 				SET_PIN(CSN,0);
@@ -353,8 +353,9 @@ void main()
 				if (*buf_pru1_cmd_ptr == P1_CMD_IDLE) {
 					run_state = RUN_STATE_DATA;
 
-					/* Restart */
+					/* Initialize capture system for next frame */
 					init_capture();
+					lep_resync_count = 0;
 				}
 			}
 
@@ -369,14 +370,14 @@ void main()
 						/* PRU1 will clear command when it reads it */
 					}
 
-					/* Restart */
+					/* Try to restart */
 					init_capture();
 					SET_PIN(LED,0);
 				} else if (pkt_response == PKT_TRIGGER) {
 					/* Got Seg1/Pkt20 - Tell PRU1 to start processing */
 					*buf_pru1_cmd_ptr = P1_CMD_IN_FRAME;
 
-					/* Reset lepton resync counter */
+					/* Reset lepton resync counter because we expect this is a good frame */
 					lep_resync_count = 0;
 
 					/* Set LED */
@@ -401,9 +402,10 @@ void main()
 					/* Delay to allow Lepton to resync */
 					__delay_cycles(LEP_RESYNC_CYCLES);
 
-					/* Restart capture */
+					/* Reinitialize capture system */
 					init_capture();
 					init_timer();
+					lep_resync_count = 0;
 
 					/* Re-assert CS */
 					SET_PIN(CSN,0);
