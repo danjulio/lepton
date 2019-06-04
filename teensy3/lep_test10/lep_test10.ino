@@ -204,7 +204,7 @@ void setup() {
     }
   }
 
-  if (!success) {};  // Spin forever on init failure
+  while (!success) {};  // Spin forever on init failure
   
   delay(2000);
 
