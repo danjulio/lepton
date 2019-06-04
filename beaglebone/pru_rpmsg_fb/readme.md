@@ -83,8 +83,8 @@ Binary firmware files must be made available to the system for the remoteproc fa
 
 ```
 cd firmware/gen
-sudo cp pru0_main.out /lib/firmware/am335x_pru0_fw
-sudo cp pru1_main.out /lib/firmware/am335x_pru1_fw
+sudo cp pru0_main.out /lib/firmware/am335x-pru0-fw
+sudo cp pru1_main.out /lib/firmware/am335x-pru1-fw
 ```
 
 #### Edit uEnv.txt
@@ -282,9 +282,9 @@ Stop the PRUs and copy the firmware to ```/lib/firmware``` as shown above.  Then
 ```
 echo "stop" > /sys/class/remoteproc/remoteproc1/state
 echo "stop" > /sys/class/remoteproc/remoteproc2/state
-sudo cp pru0_main.out /lib/firmware/am335x_pru0_fw
+sudo cp pru0_main.out /lib/firmware/am335x-pru0-fw
 echo "am335x-pru0-fw" > /sys/class/remoteproc/remoteproc1/firmware
-sudo cp pru1_main.out /lib/firmware/am335x_pru1_fw
+sudo cp pru1_main.out /lib/firmware/am335x-pru1-fw
 echo "am335x-pru1-fw" > /sys/class/remoteproc/remoteproc2/firmware
 echo "start" > /sys/class/remoteproc/remoteproc1/state
 echo "start" > /sys/class/remoteproc/remoteproc2/state
