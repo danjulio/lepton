@@ -25,7 +25,7 @@ Pocketbeagle on a proto-board with external discrete components and connections 
 The wire connection to the LCD connector shown above proved to be unreliable because flexing the cable during repeated camera assembly and disassembly eventually broke the solder connections.  Ultimately I replaced it with a connector on another proto-board securely mounted in the same plane as the Pocketbeagle proto-board.
 
 ### 2.8" LCD with resistive touch
-I used commonly available and inexpensive LCD module and removed the unused SD-card circuitry to prevent it from pressing against the Pocketbeagle wiring in the case.  I bought my module from Amazon but they are readily available from other sources as well.
+I used a commonly available and inexpensive LCD module and removed the unused SD-card circuitry to prevent it from pressing against the Pocketbeagle wiring in the case.  I bought my module from Amazon but they are readily available from other sources as well.
 
 ![LCD Module Rear](pictures/lcd_back_sm.png)
 
@@ -38,9 +38,6 @@ The battery shown above includes a 10k thermistor connected to the Pi Platter fo
 
 ### Cardboard
 I used two pieces of thin cardboard behind the two PCBs to smoothly sandwich the battery. 
-
-### bbb_platter
-Directory containing documentation and firmware to modify the Solar Pi Platter into a power management and IO expansion board for the Pocketbeagle.
 
 ### enclosure
 Eight 3D printed parts are used to create an enclosure.  The parts were designed using OpenSCAD.  The source files and STL files are included in this directory.  You will need to slice the STL files into gcode for your 3D printer.

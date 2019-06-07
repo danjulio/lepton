@@ -106,7 +106,7 @@ See the document ```bbb_platter_instructions_v1_0.pdf``` for a complete list and
 It uses udev to be able to idenfity which hardware serial device belongs to the Pi Platter (via the USB VID, PID and product strings associated with the new firmware).
 
 
-####Building
+#### Building
 
 A prebuilt binary is included here but building is very easy:
 
@@ -126,11 +126,11 @@ libudev-dev must be installed to build :
     sudo apt-get install libudev-dev
 
 
-####Usage
+#### Usage
 
 Type ```talkbp -u``` or ```talkbp -h``` for a list of command line options.
 
-####Basic commands
+#### Basic commands
 
 ASCII command strings to be sent to the Pi Platter using the '-c <string>' command.  For example to read the battery voltage and get the status
 
@@ -144,7 +144,7 @@ Or to set the restart enable
 ```talkbp``` will echo any message (such as a WARN or ERR message) pending from the Pi Platter when it connects.  It will also echo back any received responses for a command.
 
 
-####Time management
+#### Time management
 
 The Pi Platter RTC may be set from the Beaglebone's clock (once it has been set) using the command.
 
@@ -178,7 +178,7 @@ Viewing the wakeup time currently set in the Pi Platter in a readable form.
 ### bpd
 ```bpd``` is a daemon program designed to run on the Beaglebone.  It allows the system to execute a controlled shutdown in the case of a critically low battery voltage (that has triggered the Pi Platter to start a count-down to powering down the entire system).  This may be important to protect the Pocketbeagle's SD-card filesystem from corruption that can occur when power is removed from a running system.  It does this by connecting to the hardware serial port associated with the Pi Platter (like ```talkbp```, it uses udev to figure this out) and looks for the WARN string sent by the Pi Platter for critical battery detection.  Since it "commandeers" the hardware serial port, it also provides additional mechanisms for user application code to communicate with the Pi Platter.  It always creates the pseudo-tty ```/dev/bb-platter``` which can be treated like a traditional serial port device file.  It can optionally also create a TCP socket for network communication with the Pi Platter.
 
-####Building
+#### Building
 
 A prebuilt binary is included here but building is very easy:
 
@@ -194,7 +194,7 @@ You may have to set appropriate permissions (you will have to do this if you jus
 
 libudev-dev must be installed to build as with ```talkpb```.
 
-####Usage
+#### Usage
 
 ```bpd``` should be started as a daemon at start-up.  The easiest way to do this is to include somethine like the following in /etc/rc.local.
 
@@ -203,7 +203,7 @@ libudev-dev must be installed to build as with ```talkpb```.
 
 It is also possible to create a conf file in /etc/init or a startup script in /etc/init.d.
 
-####Command line options
+#### Command line options
 
 bpd takes the following command line arguments:
 
@@ -219,7 +219,7 @@ bpd takes the following command line arguments:
 
     -h : Display usage and command line options.
 
-####telnet example
+#### telnet example
 
 To connect to the TCP socket using telnet from some other computer:
 
