@@ -1,71 +1,25 @@
-## Lepton Code
+## FLIR Lepton Code
 
-This repository contains code and libraries developed for a FLIR Lepton 3.5 Thermal imaging camera [module](https://store.groupgets.com/collections/flir-lepton-accessories/products/flir-lepton-breakout-board).
+This repository contains code, libraries and hardware I developed over the course of making a thermal imaging camera based on the FLIR Lepton 3.5 [module](https://store.groupgets.com/collections/flir-lepton-accessories/products/flir-lepton-breakout-board).
 
-### Beaglebone
-Code for the Beaglebone platform.  Look in the directory for more information about the various projects there.
+The project process is documented at [hackaday.io](https://hackaday.io/project/159615-lepton-35-thermal-imaging-camera).
 
-### Teensy3
-Code for a test platform based on the PJRC Teensy 3 board.  Also includes a port of FLIR's LeptonSDKEmb32OEM CCI to the Arduino platform.
+### beaglebone
+Code for the Beaglebone Black including my initial PRU-based VoSPI video pipleline and LCD display.
 
-### leptonic-vsync
-A version of Damien Walsh's leptonic server program for the Raspberry Pi that uses VSYNC and an ISR running in user-space on the Pi to sync the Lepton's VoSPI data.
+![Beaglebone Black Prototype](beaglebone/pictures/pru_rpmsg_fb.png)
 
-![leptonic_vsync](pictures/leptonic_vsync.png)
+### pocketbeagle
+The pocketbeagle was used for the final design of a thermal imaging camera.  This directory contains the code supporting the camera and the re-targeting of my Solar Pi Platter as a power-management and expansion board for the Pocketbeagle.
 
-#### Hardware
+![Pocketbeagle Thermal Imaging Camera](pocketbeagle/pictures/boxy_pb_camera.png)
 
-![Pi Thermal Imaging Camera](pictures/pi_lepton.png)
+### raspberrypi
+Contains a modified version of Damien Walsh's great [leptonic](https://github.com/themainframe/leptonic) program running on the Raspberry Pi.  My version uses the VSYNC output from the Lepton to synchronize the VoSPI transfer as an experiment to increase the reliability of syncing a user-space process to the Lepton video stream.
 
-Connect the Lepton module's power, I2C, SPI and VSYNC output to the Pi as follows.  
+![Raspberry Pi Prototype](raspberrypi/pictures/pi_lepton.png)
 
-| Pi Header Pin | Function | Lepton Module |
-|:-------------:|:--------:|:-------------:|
-| 1             | 3V3      | VIN           |
-| 3             | SDA      | SDA           |
-| 5             | SCL      | SCL           |
-| 6             | GND      | GND           |
-| 7             | VSYNC    | GPIO3         |
-| 19            | MOSI     | MOSI          |
-| 21            | MISO     | MISO          |
-| 23            | SCLK     | SCLK          |
-| 24            | CS0      | CS            |
+### teensy3
+Contains the code I wrote initially for a test platform based on the PJRC Teensy 3.2 board to learn about the Lepton.  Also includes a port of FLIR's LeptonSDKEmb32OEM CCI to the Arduino platform.
 
-VSYNC can be found on the back of the Lepton module.
-
-![VSYNC](pictures/gpio3.png)
-
-
-#### Software
-Download and install Damien's version of [leptonic](https://github.com/themainframe/leptonic) including the dependencies he lists.  In addition, install the [PIGPIO C library](http://abyz.me.uk/rpi/pigpio/) and enable I2C on your pi if necessary using raspi-config.  PIGPIO is used for low-latency user-space interrupt handling.  Download and unpack leptonic-vsync.
-
-```
-
-cd leptonic-vsync
-make
-sudo ./bin/leptonic /dev/i2c-1 /dev/spidev0.0
-
-```
-
-You should see the leptonic server start up with output like the following.
-
-```
-pi@raspberrypi:~/leptonic-vsync $ sudo ./bin/leptonic /dev/i2c-1 /dev/spidev0.0
-08:10:14 INFO  src/leptonic.c:223: preallocating space for segments...
-08:10:14 INFO  src/leptonic.c:232: Creating get_frames_from_device thread
-08:10:14 INFO  src/leptonic.c:238: Creating send_frames_to_socket thread
-08:10:14 INFO  src/leptonic.c:80: opening I2C device... /dev/i2c-1
-08:10:14 INFO  src/leptonic.c:87: opening SPI device... /dev/spidev0.0
-08:10:14 INFO  src/leptonic.c:106: aquiring VoSPI synchronisation
-```
-
-Then start the frontend code in the original leptonic frontend directory.
-
-```
-npm start
-```
-
-You should be able to view the output from the camera on a web browser using the Pi's address at port 3000 as with Damien's original code.
-
-#### AGC
-Uncomment out the call to ````cci_set_agc_enable_state```` in leptonic.c to enable AGC.  This results in a slightly better image utilizing the Lepton's built-in AGC functionality.
+![Teensy 3 Cam](teensy3/pictures/display_pi_rainbow.png)

@@ -4,7 +4,7 @@
 
 This directory contains code for a test platform based on the PJRC Teensy 3.2 development board.  It consists of a set of Arduino-environment sketches and a port of the FLIR IDD library used to control the module via its I2C bus.
 
-The project is documented at [hackaday.io](https://hackaday.io/project/159615-lepton-35-thermal-imaging-camera).  It uses a ILI9341-based 320x240 pixel LCD display.
+The project is documented at [hackaday.io](https://hackaday.io/project/159615-lepton-35-thermal-imaging-camera).  It uses an ILI9341-based 320x240 pixel LCD display.
 
 ![Teensy Thermal Imaging Camera](pictures/unit_left.png)
 
