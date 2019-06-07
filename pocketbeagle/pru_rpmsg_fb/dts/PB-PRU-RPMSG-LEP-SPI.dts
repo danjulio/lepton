@@ -1,0 +1,91 @@
+/*
+ *
+ * Copyright (C) 2018 Dan Julio (dan@danjuliodesigns.com)
+ *
+ * Pocketbeagle PRU-based SPI engine for leptonic Lepton3.5 display
+ *
+ * Build: 
+ *   dtc -O dtb -o PB-PRU-RPMSG-LEP-SPI.dtbo -b 0 -@ PB-PRU-RPMSG-LEP-SPI.dts
+ *
+ * Install:
+ *   sudo cp PB-PRU-RPMSG-LEP-SPI.dtbo /lib/firmware
+ *   edit /boot/uEnv.txt as root and change one of the "Additional custom capes"
+ *    overlay entries as shown below.
+ *
+ *   ###Additional custom capes
+ *   uboot_overlay_addr4=/lib/firmware/PB-PRU-RPMSG-LEP-SPI.dtbo
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+*/
+/dts-v1/;
+/plugin/;
+/ {
+	compatible = "ti,am335x-pocketbeagle";
+
+	/* identification */
+	part-number = "PB-PRU-RPMSG-LEP-SPI";
+
+	/* version */
+	version = "00A0";
+
+	/* stat the resources this cape uses */
+	exclusive-use = 
+		/* the pin header uses */
+		"P2.24",	/* PRU0 SCLK */
+		"P2.34",	/* PRU0 MISO */
+		"P2.32",	/* PRU0 CS0 */
+		"P1.36",	/* PRU0 Diagnostic LED */
+		"P1.35";	/* PRU1 Diagnostic LED */
+
+	fragment@0 {
+		target = <&ocp>;
+		__overlay__ {
+			P1_35_pinmux { status = "disabled"; };
+			P1_36_pinmux { status = "disabled"; };
+			P2_24_pinmux { status = "disabled"; };
+			P2_32_pinmux { status = "disabled"; };
+			P2_34_pinmux { status = "disabled"; };
+		};
+	};
+
+	fragment@1 {
+		target = <&am33xx_pinmux>;
+		__overlay__ {
+			pru_spi_pins: pru_spi_pins {
+				pinctrl-single,pins = <
+					0x030 0x06	/* P2_24: pr1_pru0_pru_r30_14, OUTPUT_PULLDOWN | MODE6 */
+					0x1a4 0x26	/* P2_34: pr1_pru0_pru_r31_5, INPUT_PULLDOWN | MODE6 */
+					0x198 0x05	/* P2_32: pr1_pru0_pru_r30_2, OUTPUT_PULLDOWN | MODE5 */
+				>;
+			};
+
+			pru_diag_led_pins: pru_diag_led_pins {
+				pinctrl-single,pins = <
+					0x190 0x05	/* P1_36: pr1_pru0_pru_r30_0, OUTPUT_PULLDOWN | MODE5 */
+					0x0e8 0x05	/* P1_35: pr1_pru1_pru_r30_10, OUTPUT_PULLDOWN | MODE5 */
+				>;
+			};
+		};
+	};
+
+	fragment@2 {
+		target = <&ocp>;
+		__overlay__ {
+			pru_spi_pinmux {
+				compatible = "bone-pinmux-helper";
+				status = "okay";
+				pinctrl-names = "default";
+				pinctrl-0 = <&pru_spi_pins>;
+			};
+
+			pru_diag_led_pinmux {
+				compatible = "bone-pinmux-helper";
+				status = "okay";
+				pinctrl-names = "default";
+				pinctrl-0 = <&pru_diag_led_pins>;
+			};
+		};
+	};
+};
