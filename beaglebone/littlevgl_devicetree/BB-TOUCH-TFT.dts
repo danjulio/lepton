@@ -1,0 +1,194 @@
+/*
+ * Touch LCD device tree
+ *  - ILI9341 LCD device tree for a generic LCD display using the beaglebone black SPI0
+ *  - TSC2046 resistive touch controller (TSC2046) using the beaglebone black SPI1
+ *
+ * Build
+ *  dtc -O dtb -o BB-TOUCH-TFT.dtbo -b 0 -@ BB-TOUCH-TFT.dts
+ *
+ * Install
+ *  sudo cp BB-TOUCH-TFT.dtbo /lib/firmware
+ *  edit /boot/uEnv.txt as root and replace the ###Custom Cape line as shown below
+ *
+ *   ###Custom Cape
+ *   dtb_overlay=/lib/firmware/BB-TOUCH-TFT.dtbo
+ *
+ * Reboot and you should be rewarded by a lit LCD and a /dev/fb0 entry for your pleasure.
+ *
+ * Based on the work by: AnthonyDiGirolamo and Ankit Daftery
+ *
+ */
+/dts-v1/;
+/plugin/;
+
+/ {
+compatible = "ti,beaglebone", "ti,beaglebone-black";
+
+/* identification */
+part-number = "BB-TOUCH-TFT";
+
+/* version */
+version = "00A0";
+
+/* state the resources this cape uses */
+exclusive-use = 
+	/* the LCD pin header uses */
+	"P9.22",	/* spi0_sclk */
+	"P9.21",	/* spi0_d0 - MISO */
+	"P9.18",	/* spi0_d1 - MOSI */
+	"P9.17",	/* spi0_cs0 */
+	"P9.15",	/* gpio1_16 - reset */
+	"P9.12",	/* gpio1_28 - dc */
+	"P9.14",	/* ehrpwm1a - backlight */
+	/* the Touch pin header uses */
+	"P9.28",	/* SPI1_cs1 */
+	"P9.29",	/* SPI1_d0 - MISO */
+	"P9.30",	/* SPI1_d1 - MOSI */
+	"P2.31",	/* SPI1_sclk */
+	"P9.27",	/* gpio3_19 - pendown */
+	/* the hardware ip uses */
+	"gpio1_16",
+	"gpio1_28",
+	"gpio3_19",
+	"ehrpwm1a",
+	"spi0",
+	"spi1";
+
+	fragment@0 {
+		target = <&am33xx_pinmux>;
+		__overlay__ {
+			spi0_pins_s0: spi0_pins_s0 {
+				pinctrl-single,pins = <
+					0x150 0x30	/* P9_22: spi0_sclk, INPUT_PULLUP | MODE0 */
+					0x154 0x30	/* P9_21: spi0_d0 MISO, INPUT_PULLUP | MODE0 */
+					0x158 0x10	/* P9_18: spi0_d1 MOSI, OUTPUT_PULLUP | MODE0 */
+					0x15c 0x10	/* P9_17: spi0_cs0, OUTPUT_PULLUP | MODE0 */
+				>;
+			};
+
+			lcd_ctrl_pinmux: lcd_ctrl_pins {
+				pinctrl-single,pins = <
+					0x040 0x17	/* P9_15: gpio1_16 reset, OUTPUT_PULLUP | MODE7 */
+					0x078 0x17	/* P9_12: gpio1_28 DC, OUTPUT_PULLUP | MODE7 */
+				>;
+			};
+
+			pwm_bl_pins: pinmux_pwm_bl_pins {
+				pinctrl-single,pins = <
+					0x48 0x06	/* P9_14: ehrpwm1a, MODE6 */
+				>;
+			};
+
+			spi1_pins_s0: spi1_pins_s0 {
+				pinctrl-single,pins = <
+					0x190 0x33	/* P9_31: spi1_sclk, INPUT_PULLUP | MODE3 */
+					0x194 0x33	/* P9_29: spi1_d0 MISO, INPUT_PULLUP | MODE3 */
+					0x198 0x13	/* P9_30: spi1_d1 MOSI, OUTPUT_PULLUP | MODE3 */
+					0x19c 0x13	/* P9_28: spi1_cs0, OUTPUT_PULLUP | MODE3 */
+				>;
+			};
+
+			touch_ctrl_pinmux: touch_ctrl_pins {
+				pinctrl-single,pins = <
+					0x1a4 0x37      /* P9_27: gpio3_19 IRQ, INPUT_PULL_UP | MODE7 */
+				>;
+			};
+		};
+	};
+
+	fragment@1 {
+		target = <&spi0>;
+		__overlay__ {
+			status = "okay";
+			pinctrl-names = "default";
+			pinctrl-0 = <&spi0_pins_s0>;
+	
+			#address-cells = <1>;
+			#size-cells = <0>;
+	
+			lcd@0{
+				compatible = "fb_ili9341";
+				reg = <0>;
+	
+				pinctrl-names = "default";
+				pinctrl-0 = <&lcd_ctrl_pinmux>;
+	
+				spi-max-frequency = <25000000>;
+				rotate = <90>;
+				bgr;
+				fps = <30>;
+				buswidth = <8>;
+				reset-gpios = <&gpio1 16 0>;
+				dc-gpios = <&gpio1 28 0>;
+	
+				debug = <3>;
+			};
+		};
+	};
+	
+	fragment@2 {
+		target = <&epwmss1>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+	
+	fragment@3 {
+		target = <&ehrpwm1>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+	
+	fragment@4 {
+		target = <&ocp>;
+		__overlay__ {
+			backlight {
+				compatible = "pwm-backlight";
+				pinctrl-names = "default";
+				pinctrl-0 = <&pwm_bl_pins>;
+				status = "okay";
+	
+				pwms = <&ehrpwm1 0 500000 0>;
+				pwm-names = "backlight";
+				brightness-levels = <0 4 8 16 32 64 128 255>;
+				default-brightness-level = <7>; /* index to the array above */
+			};
+		};
+	};
+
+	fragment@5 {
+		target = <&spi1>;
+		__overlay__ {
+			#address-cells = <0x1>;
+	     	        #size-cells = <0>;
+			status = "okay";
+			pinctrl-names = "default";
+			pinctrl-0 = <&spi1_pins_s0>;
+			#ti,pindir-d0-out-d1-in = <1>;
+ 		    ads7846@0 {
+				compatible = "ti,ads7846";
+				spi-max-frequency = <100000>;   /* Higher frequency causes more jitter */
+				interrupts = <19 0>;             /* pin number P9-27 and falling edge interrupt */
+				interrupt-parent = <&gpio3>;
+				pendown-gpio = <&gpio3 19 0>;        /* This corresponds to pin no P9-27 = GPIO3[19]*/
+				reg = <0>;     /* We are using chip select 0, so we enter 0 here */
+                #addr-size = <2>;
+                #page-size = <32>;
+
+                /* driver defaults */
+                ti,x-min = /bits/ 16 <0xB0>;
+                ti,y-min = /bits/ 16 <0x231>;
+                ti,x-max = /bits/ 16 <0xF49>;
+                ti,y-max = /bits/ 16 <0xF6B>;
+                ti,pressure-min = /bits/ 16 <0>;
+                ti,pressure-max = /bits/ 16 <0xFF>;
+                ti,x-plate-ohms = /bits/ 16 <0x96>;
+                ti,swap_xy = /bits/ 16 <0>;
+                ti,keep_vref_on = /bits/ 16 <0>;
+                ti,cs = /bits/ 16 <1>;
+    		    linux,wakeup;
+	        };
+        };
+    };
+};
