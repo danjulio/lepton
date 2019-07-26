@@ -4,6 +4,9 @@ The tiny Pocketbeagle forms the core of a complete thermal imaging camera using 
 ![Thermal Imaging Camera](pictures/boxy_pb_camera.png)
 
 ## Software
+### littlevgl\_demo
+The necessary device tree file and a port of the littlevgl library and demo program to enable a touch-based GUI application on the build-in LCD.
+
 ### pru\_rpmsg\_fb
 A port of the code originally written for the Beaglebone Black to the Pocketbeagle to display a simple image on the attached LCD screen.  The primary differences are the device tree files for the PRU/Lepton interface and SPI/LCD interface and the ```uEnv.txt``` file that uses them.  The PRU firmware implementing the VoSPI pipeline is also modified for the different pins used on the Pocketbeagle, but otherwise the same as the Beaglebone Black version.
 

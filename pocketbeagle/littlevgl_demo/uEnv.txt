@@ -1,0 +1,71 @@
+#Docs: http://elinux.org/Beagleboard:U-boot_partitioning_layout_2.0
+
+uname_r=4.14.49-ti-r54
+#uuid=
+#dtb=
+
+
+###U-Boot Overlays###
+###Documentation: http://elinux.org/Beagleboard:BeagleBoneBlack_Debian#U-Boot_Overlays
+###Master Enable
+enable_uboot_overlays=1
+###
+###Overide capes with eeprom
+#uboot_overlay_addr0=/lib/firmware/<file0>.dtbo
+#uboot_overlay_addr1=/lib/firmware/<file1>.dtbo
+#uboot_overlay_addr2=/lib/firmware/<file2>.dtbo
+#uboot_overlay_addr3=/lib/firmware/<file3>.dtbo
+###
+###Additional custom capes
+#uboot_overlay_addr4=/lib/firmware/<file4>.dtbo
+#uboot_overlay_addr4=/lib/firmware/BB-SPIDEV1-00A0.dtbo
+#uboot_overlay_addr4=/lib/firmware/PRU-RPMSG-LEP-SPI.dtbo
+#uboot_overlay_addr5=/lib/firmware/<file5>.dtbo
+#uboot_overlay_addr6=/lib/firmware/<file6>.dtbo
+#uboot_overlay_addr7=/lib/firmware/<file7>.dtbo
+###
+###Custom Cape
+#dtb_overlay=/lib/firmware/<file8>.dtbo
+#dtb_overlay=/lib/firmware/TFT-ILI9348-SPI0.dtbo
+dtb_overlay=/lib/firmware/BB-TOUCH-TFT.dtbo
+###
+###Disable auto loading of virtual capes (emmc/video/wireless/adc)
+#disable_uboot_overlay_emmc=1
+disable_uboot_overlay_video=1
+disable_uboot_overlay_audio=1
+#disable_uboot_overlay_wireless=1
+#disable_uboot_overlay_adc=1
+###
+###PRUSS OPTIONS
+###pru_rproc (4.4.x-ti kernel)
+#uboot_overlay_pru=/lib/firmware/AM335X-PRU-RPROC-4-4-TI-00A0.dtbo
+###pru_rproc (4.9.x-ti kernel)
+#uboot_overlay_pru=/lib/firmware/AM335X-PRU-RPROC-4-9-TI-00A0.dtbo
+###pru_rproc (4.14.x-ti kernel)
+uboot_overlay_pru=/lib/firmware/AM335X-PRU-RPROC-4-14-TI-00A0.dtbo
+###pru_uio (4.4.x-ti, 4.9.x-ti, 4.14.x-ti & mainline/bone kernel)
+#uboot_overlay_pru=/lib/firmware/AM335X-PRU-UIO-00A0.dtbo
+###
+###Cape Universal Enable
+enable_uboot_cape_universal=1
+###
+###Debug: disable uboot autoload of Cape
+#disable_uboot_overlay_addr0=1
+#disable_uboot_overlay_addr1=1
+#disable_uboot_overlay_addr2=1
+#disable_uboot_overlay_addr3=1
+###
+###U-Boot fdt tweaks... (60000 = 384KB)
+#uboot_fdt_buffer=0x60000
+###U-Boot Overlays###
+
+#cmdline=coherent_pool=1M net.ifnames=0 quiet spidev.bufsiz=16384 vt.global_cursor_default=0
+cmdline=coherent_pool=1M net.ifnames=0 quiet vt.global_cursor_default=0
+
+#In the event of edid real failures, uncomment this next line:
+#cmdline=coherent_pool=1M net.ifnames=0 quiet video=HDMI-A-1:1024x768@60e
+
+##enable Generic eMMC Flasher:
+##make sure, these tools are installed: dosfstools rsync
+#cmdline=init=/opt/scripts/tools/eMMC/init-eMMC-flasher-v3.sh
+
