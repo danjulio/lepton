@@ -1,8 +1,13 @@
 ## FLIR Lepton Code
 
-This repository contains code, libraries and hardware I developed over the course of making a thermal imaging camera based on the FLIR Lepton 3.5 [module](https://store.groupgets.com/collections/flir-lepton-accessories/products/flir-lepton-breakout-board).
+This repository contains code, libraries and hardware I developed over the course of making a series of thermal imaging cameras based on the FLIR Lepton 3.5 camera or [module](https://store.groupgets.com/collections/flir-lepton-accessories/products/flir-lepton-breakout-board) on many different platforms.
 
 The project process is documented at [hackaday.io](https://hackaday.io/project/159615-lepton-35-thermal-imaging-camera).
+
+### ESP32
+Contains code, design information and supporting applications for a pair of cameras based around the ESP32.
+
+![tCam-Mini](ESP32/pictures/tcam_app_candle.png) 
 
 ### beaglebone
 Code for the Beaglebone Black including my initial PRU-based VoSPI video pipleline and LCD display.
