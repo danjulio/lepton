@@ -9,7 +9,7 @@ It has a I2C expansion port that I intend to use to explore adding additional se
 The "Firmware" directory contains a V4.0.2 Espressif ESP32 IDF project for tCam-Mini. You should be able to build and load it into a camera using the IDF commands (I still use "make program monitor").  There are also a set of precompiled binaries in the "precompiled" sub-directory.  You can use the Espressif tool and instructions found in the "programming" directory in parallel to this one to load those into a camera without having to build the project.
 
 ### Hardware
-The "Hardware" directory contains PCB gerbers, stencil gerbers, a BOM and a schematic PDF.  These can be used to build a tCam-Mini.
+The "Hardware" directory contains PCB gerbers, stencil gerbers, a BOM and a schematic PDF.  These can be used to build a tCam-Mini on the PCB I designed.  See below for instructions on building one from commonly available development boards.
 
 ### Operation
 tCam-Mini is a command-based device.  It is designed for software running on another device to control it and receive responses and image data from it.  The software communicates with tCam-Mini via a socket interface with commands, responses and images encoded as json packets.  Data is not encrypted so appropriate care should be taken.
@@ -326,4 +326,29 @@ My first tCam-Mini was built using a Sparkfun ESP32 Thing+ and a Lepton Breakout
 
 ![tCam-Mini Prototype](pictures/tcam_mini_prototype.png)
 
-A hand-drawn schematic can be found in the pictures directory here (tcam\_mini\_proto\_schem.pdf) if you'd like to try to build one without the hassle of making a PCB and soldering SMT parts.  It might be easier yet to use a development board with an ESP32 WROVER module.
+A hand-drawn schematic can be found in the pictures directory here (tcam\_mini\_proto\_schem.pdf) if you'd like to try to build one without the hassle of making a PCB and soldering SMT parts.  
+
+### Building with dev boards
+I found the [TTGO V7 V1.4](http://www.lilygo.cn/prod_view.aspx?TypeId=50033&Id=978&FId=t3:50033:3) ESP32 WROVER based development board long after I started this project but it's a good way, along with a [Lepton Breakout](https://store.groupgets.com/products/purethermal-breakout-board) from Group Gets, to even more easily build a tCam-Mini without having to make and load a PCB.  The PSRAM is already part of the WROVER module simplifying the build considerably.
+
+![ttgo based design](pictures/ttgo_version_side.png)
+
+You'll also need the following components.
+
+* Small proto board to build on.  I used a commonly available 4x6cm board.
+* 5 10-pin 0.1" headers (4 for the TTGO V7 and 1 for the Lepton Breakout).
+* A small tactile push button.
+* A dual Red-Green common-cathode LED (I use a Lite-On LTL1BEKVJNN).
+* Two 180-330 ohm resistors, 1/8 - 1/4 watt.
+* Optional electrolytic capacitor.  This should only be necessary if there is a voltage drop when the Lepton performs a FFC causing it to malfunction.
+
+The components are wired together as shown below.
+
+![ttgo top and bottom](pictures/ttgo_version_top_bot.png)
+
+![ttgo wiring diagram](pictures/ttgo_based_tcam_mini.png)
+
+#### ESP Revision Note
+The modules I buy from Mouser for the PCB design include a Rev 3 ESP32 chip and I compile for that version.  I found that the TTGO module had a Rev 1 ESP32 chip so I recompiled the project for Rev 1.  The binary files for that revision can also be found in the firmware/precompiled subdirectory.  The camera won't boot if you use the wrong chip revision.
+
+Also I buy 8 MB Flash modules but the TTGO module is 4 MB (32 MBit).  Be sure to properly configure the flash size in the programmer to match your module or the firmware will fail to boot.
