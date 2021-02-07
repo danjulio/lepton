@@ -33,7 +33,7 @@ Click the `ESP32 Download Tool` button.  The ESP32 Download Tool program runs an
 
 1. Load the three firmware files from the location you stored them by clicking on first three `...` buttons as shown above under the `SPIDownload` tab.
 2. Set the location in ESP32 memory for each file as shown above by clicking in the text fields to the right of each filename.
-3. Configure the programming parameters in the `SpiFlashConfig` area.  Select SPI SPEED: 40 MHz, SPI MODE: DIO, FLASH SIZE: 64 Mbit.
+3. Configure the programming parameters in the `SpiFlashConfig` area.  Select SPI SPEED: 40 MHz, SPI MODE: DIO, FLASH SIZE: to match the flash size of your ESP32 module (4 MB Flash = 32 Mbit, 8 MB Flash = 64 MBit).
 4. Select the COM port associated with the camera.
 5. Set a fast baud rate of 921600 baud to reduce programming time.
 
