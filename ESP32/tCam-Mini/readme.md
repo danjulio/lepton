@@ -329,7 +329,7 @@ My first tCam-Mini was built using a Sparkfun ESP32 Thing+ and a Lepton Breakout
 A hand-drawn schematic can be found in the pictures directory here (tcam\_mini\_proto\_schem.pdf) if you'd like to try to build one without the hassle of making a PCB and soldering SMT parts.  
 
 ### Building with dev boards
-I found the [TTGO V7 V1.4](http://www.lilygo.cn/prod_view.aspx?TypeId=50033&Id=978&FId=t3:50033:3) ESP32 WROVER based development board long after I started this project but it's a good way, along with a [Lepton Breakout](https://store.groupgets.com/products/purethermal-breakout-board) from Group Gets, to even more easily build a tCam-Mini without having to make and load a PCB.  The PSRAM is already part of the WROVER module simplifying the build considerably.
+I found the [TTGO T7 V1.4](http://www.lilygo.cn/prod_view.aspx?TypeId=50033&Id=978&FId=t3:50033:3) ESP32 WROVER based development board long after I started this project but it's a good way, along with a [Lepton Breakout](https://store.groupgets.com/products/purethermal-breakout-board) from Group Gets, to even more easily build a tCam-Mini without having to make and load a PCB.  The PSRAM is already part of the WROVER module simplifying the build considerably.
 
 ![ttgo based design](pictures/ttgo_version_side.png)
 
