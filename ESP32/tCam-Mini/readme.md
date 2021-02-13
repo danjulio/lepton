@@ -103,14 +103,23 @@ Commands and responses are detailed below with example json strings.
 	}
 }
 ```
+The get_status response may include additional information for other camera models (for example Battery/Charge information).
 
 | Status Item | Description |
 | --- | --- |
 | Camera | AP SSID also used as the camera name. |
-| Model | tCam-Mini identifies with "2".  Software can use the camera model to enable and disable camera specific functionality. |
+| Model | A 32-bit mask with camera information (see below). Software can use the camera model to enable and disable camera specific functionality. |
 | Version | Firmware version. "Major Revision . Minor Revision" |
 | Time | Current Camera Time including milliseconds: HH:MM:SS.MSEC |
 | Date | Current Camera Date: MM/DD/YY |
+
+| Model Bit | Description |
+| --- | --- |
+| 31:18 | Reserved - Read as 0 |
+| 17 | Has Filesystem Flag |
+| 16 | Has Battery Flag |
+| 15:8 | Reserved - Read as 0 |
+| 7:0 | Camera Model Number - tCam-Mini is Model Number 2 |
 
 #### get_image
 ```{"cmd":"get_image"}```
@@ -119,11 +128,11 @@ Commands and responses are detailed below with example json strings.
 ```
 {
 	"metadata":	{
-		"Camera":	"tCam-Mini-EFB5",
-		"Model":	2,
-		"Version":	"1.0",
-		"Time":	"19:00:58.644",
-		"Date":	"2/3/21"
+		"Camera": "tCam-Mini-EFB5",
+		"Model": 2,
+		"Version": "1.0",
+		"Time": "19:00:58.644",
+		"Date": "2/3/21"
 	},
 	"radiometric": "I3Ypdg12B3YPdgt2BXYRdgF2A3YFdgF2AXYNdv91+3ULdvd..."
 	"telemetry": "DgCDMSkAMAgAABBhCIKyzJpkj..."
@@ -134,7 +143,7 @@ Commands and responses are detailed below with example json strings.
 | --- | --- |
 | metadata | Camera status information at the time the image was acquired. |
 | radiometric | Base64 encoded Lepton pixel data. 19,200 16-bit words (38,400 bytes).  Each pixel contains a 16-bit absolute (Kelvin) temperature value when the Lepton is operating in Radiometric output mode.  The Lepton's gain mode specifies the resolution (0.01 K in High gain, 0.1 K in Low gain). Each pixel contains an 8-bit value when the Lepton has AGC enabled. |
-| telmetry | Base64 encoded Lepton telemetry data.  240 16-bit words (480 bytes).  See the Lepton Datasheet for a description of the telemetry contents. |
+| telemetry | Base64 encoded Lepton telemetry data.  240 16-bit words (480 bytes).  See the Lepton Datasheet for a description of the telemetry contents. |
 
 #### set_time
 ```
@@ -321,6 +330,13 @@ Only a subset of the flags argument are used to configure WiFi operation.  Other
 | 4 | Static IP - Set to 1 to use a Static IP, 0 to request an IP via DHCP when operating in Client mode. |
 | 0 | Bit 0: Wifi Enabled - Set to 1 to enable Wifi, 0 to disable Wifi. |
 
+#### Streaming (and a performance note)
+Streaming is a slightly special case for the command interface.  Responses are only generated after receiving the associated get command.  However the image response is generated repeatedly by the camera after streaming has been enabled at the rate, and for the number of times, specified in the set\_stream\_on command.
+
+While the task that services the Lepton is capable of getting the maximum 8.7 fps frame-rate out of the sensor, the task generating the image response and sending it through the ESP32's network and Wifi stacks can't quite keep up.  It appears that the time required to send the data over the ESP32's Wifi interface varies depending on a several factors including the ESP32 antenna. I get better performance using an ESP32 module with an external antenna than with the built-in PCB antenna.
+
+Typical streaming rates vary from about 5-7 fps.  The fps display on the companion application will dip every time the Lepton performs a FFC because it is averaging over several seconds and the camera stops sending images during the FFC (about 1.5 seconds).
+ 
 ### Prototype
 My first tCam-Mini was built using a Sparkfun ESP32 Thing+ and a Lepton Breakout board from Group Gets.  I added an external PSRAM for more buffer space and a red/green LED (with current limiting resistors).  The GPIO0 button is the WiFi Reset Button.
 
@@ -330,6 +346,8 @@ A hand-drawn schematic can be found in the pictures directory here (tcam\_mini\_
 
 ### Building with dev boards
 I found the [TTGO T7 V1.4](http://www.lilygo.cn/prod_view.aspx?TypeId=50033&Id=978&FId=t3:50033:3) ESP32 WROVER based development board long after I started this project but it's a good way, along with a [Lepton Breakout](https://store.groupgets.com/products/purethermal-breakout-board) from Group Gets, to even more easily build a tCam-Mini without having to make and load a PCB.  The PSRAM is already part of the WROVER module simplifying the build considerably.
+
+You can use other ESP32 development boards, just make sure they have a 4 or 8 MB PSRAM (WROVER-based).
 
 ![ttgo based design](pictures/ttgo_version_side.png)
 
