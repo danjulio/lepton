@@ -10,9 +10,15 @@ This repository contains the companion desktop application for the tCam cameras.
 * Export radiometric data as a common format image file.
 * Graph temperature at up to five points from a stream or video file.
 
-The application is developed using the [xojo](https://www.xojo.com) development environment.  64-bit binary images are provided for Mac OS X, Windows and x86 Linux systems.  Download the zip file for your platform.  The application can be run directly from the unzipped directory by double clicking the application binary icon.  You may need to make the Linux application file executable.  You may also have to authorize the application on OS X or Windows platforms since I don't yet sign it or package it for distribution in their online stores.
+The application is developed using the [xojo](https://www.xojo.com) development environment.  64-bit binary images are provided for Mac OS X, Windows and x86 Linux systems.  A 32-bit binary image is provided for Raspbian.  Download the zip file for your platform.  The application can be run directly from the unzipped directory by double clicking the application binary icon.
 
-An apology - I develop on my Mac and do quick tests on Windows 7 and 10 and Ubuntu.  Although xojo provides pretty good cross-platform compatibility, sometimes there are issues on the other platforms (especially Linux - Windows operation is generally pretty good).  The main difference for this application is the menu bar across the top of the Main Window.  Linux puts the text next to, instead of underneath the icon so all the menu bar items on the right side must be accessed via a pull down drawn at the right side of the menu bar.  If you find some other issue, please let me know and I'll try to fix it.
+#### Platform Caveats
+
+1. You may need to make the Linux application file executable.
+2. You may also have to authorize the application on OS X or Windows platforms since I don't yet sign it or package it for distribution in their online stores.
+3. Different Linux desktop systems render the toolbar differently and all toolbar items aren't visible since Linux renders the text next to the icon instead of beneath it.  You can make the window wider to expose some important controls like Stream that has sub-menus or you can use the pull-down menus at the top of the window.
+
+An apology - I develop on my Mac and do quick tests on Windows 7 and 10, and Ubuntu, Kubuntu and Raspbian.  Although xojo provides pretty good cross-platform compatibility for OS X and Windows, sometimes there are issues with Linux.  If you find some other issue, please let me know and I'll try to fix it.
 
 
 ### Main Window
