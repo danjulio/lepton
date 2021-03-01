@@ -3,6 +3,8 @@ This directory contains design files for tCam-Mini including PCB gerbers, stenci
 
 ![tCam-Mini Rev 1](pictures/tcam_min_pcb_r1_render.png)
 
+![tCam-Mini Dimensions](pictures/tcam_mini_dimensions.png)
+
 ### LED Orientation
 The LED is aligned as shown below.  Lead length should be adjusted to fit an enclosure if desired or so the dome of the LED is beyond the edge of the PCB.
 
