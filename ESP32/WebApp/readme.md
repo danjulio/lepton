@@ -92,7 +92,7 @@ Clicking Restore will overwrite the local list of cameras with the list of camer
 | Item | Description |
 | --- | --- |
 | Camera Name | Sets a friendly name, displayed in other panels and used to create a camera-specific image directory, for the camera. |
-| Camera IPV Address | Sets the network address for the camera. |
+| Camera IPV4 Address | Sets the network address for the camera. |
 | Camera Socket Port | Sets the network socket port for the camera.  Normally this is 5001 and won't be changed. |
 | Camera Emissivity | Sets the emissivity for the camera.  May be changed to increase accuracy if the emissivity of important objects in the scene the camera monitors is known. |
 | Event Detection | Set to enable event detection using the parameters below the control. Images will be stored if they meet the criteria specified by the parameters. |
