@@ -558,7 +558,7 @@ static esp_err_t sys_event_handler(void *ctx, system_event_t* event)
         	
         case SYSTEM_EVENT_STA_DISCONNECTED:
         	wifi_info.flags &= ~WIFI_INFO_FLAG_CONNECTED;
-        	if (sta_connected && !scan_in_progress) {
+        	if (!scan_in_progress) {
         		if (sta_retry_num > WIFI_FAST_RECONNECT_ATTEMPTS) {
         			vTaskDelay(pdMS_TO_TICKS(1000));
         		} else {
