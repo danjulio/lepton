@@ -14,3 +14,7 @@ Both cameras share a common command set for remote access.  A companion Desktop 
 
 ![Desktop Application](pictures/app_on_desktop.png)
 
+### Web Server
+A simple stand-alone server that can connect to multiple cameras, record images that meet certain criteria and display images from the cameras in a web browser.
+
+![Web Application](pictures/tcam_web.png)
