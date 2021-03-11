@@ -68,6 +68,7 @@ static const char* TAG = "lep_task";
 
 /**
  * This task drives the Lepton camera interface.
+ *   Note: GPIO signals must be initialized prior to task start.
  */
 void lep_task()
 {
@@ -79,11 +80,6 @@ void lep_task()
 	int64_t vsyncDetectedUsec;
 	
 	ESP_LOGI(TAG, "Start task");
-
-	// Initialize the control signals
-	gpio_set_direction(LEP_VSYNC_IO, GPIO_MODE_INPUT);
-	gpio_set_direction(LEP_RESET_IO, GPIO_MODE_OUTPUT);
-	gpio_set_level(LEP_RESET_IO, 0);
 	
 	// Attempt to initialize the VoSPI interface
 	if (vospi_init() != ESP_OK) {

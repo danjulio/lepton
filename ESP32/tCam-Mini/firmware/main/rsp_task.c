@@ -241,9 +241,7 @@ static void handle_notifications()
 			// Setup streaming
 			cur_stream_frame_delay_usec = next_stream_frame_delay_msec * 1000;
 			cur_stream_frame_num = next_stream_frame_num;
-			if (cur_stream_frame_num != 0) {
-				stream_remaining_frames = cur_stream_frame_num;
-			}
+			stream_remaining_frames = next_stream_frame_num;
 			
 			// First image is immediate
 			stream_ready_usec = esp_timer_get_time();

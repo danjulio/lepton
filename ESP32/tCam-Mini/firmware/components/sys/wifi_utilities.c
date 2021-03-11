@@ -7,7 +7,7 @@
  *
  * Note: Currently only 1 station is allowed to connect at a time.
  *
- * Copyright 2020 Dan Julio
+ * Copyright 2020-2021 Dan Julio
  *
  * This file is part of tCam.
  *
@@ -22,7 +22,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with firecam.  If not, see <https://www.gnu.org/licenses/>.
+ * along with tCam.  If not, see <https://www.gnu.org/licenses/>.
  *
  */
 #include "wifi_utilities.h"

@@ -19,12 +19,13 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with firecam.  If not, see <https://www.gnu.org/licenses/>.
+ * along with tCam.  If not, see <https://www.gnu.org/licenses/>.
  *
  */
 #include "esp_system.h"
 #include "esp_log.h"
 #include "esp_heap_caps.h"
+#include "driver/gpio.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "driver/spi_master.h"
@@ -133,6 +134,14 @@ bool system_peripheral_init()
 		ESP_LOGE(TAG, "WiFi initialization failed");
 		return false;
 	}
+	
+	// Initialize the Lepton GPIO and then reset the Lepton
+	// (reset handles potential external crystal oscillator slow start-up)
+	gpio_set_direction(LEP_VSYNC_IO, GPIO_MODE_INPUT);
+	gpio_set_direction(LEP_RESET_IO, GPIO_MODE_OUTPUT);
+	gpio_set_level(LEP_RESET_IO, 1);
+	vTaskDelay(pdMS_TO_TICKS(10));
+	gpio_set_level(LEP_RESET_IO, 0);
 	
 	return true;
 }
