@@ -1,7 +1,7 @@
 ## tCam-Mini
 tCam-Mini was created using code from the tCam project and ended up being finished first.  It is a simple device, hardware-wise, consisting of an ESP32 WROVER module, USB UART for programming and debug, Lepton 3.5 and supporting voltage regulators and oscillator.
 
-![tCam-Mini Front and Back](pictures/tcam_mini_pcb_r1.png)
+![tCam-Mini Front and Back](pictures/tcam_mini_pcb_r2.png)
 
 It has a I2C expansion port that I intend to use to explore adding additional sensing capability such as humidity, distance and lens temperature to increase the camera's accuracy.
 
