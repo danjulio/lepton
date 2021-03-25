@@ -11,7 +11,7 @@ Download the three binary files from this repository to a known location.  All t
 
 ```
 	firmware/precompiled/bootloader.bin
-	firmware/precompiled/firecam.bin
+	firmware/precompiled/tCam.bin
 	firmware/precompiled/partitions_singleapp.bin
 ```
 
