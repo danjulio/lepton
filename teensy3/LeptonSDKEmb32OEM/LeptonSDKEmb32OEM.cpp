@@ -7,6 +7,7 @@
 **   DESCRIPTION: Lepton SDK Module ported to Arduino
 **
 **   HISTORY: 6/12/2018 DJD - Initial Draft
+**           11/22/2019 DJD - Support for ESP32
 **
 **   Based on FLIR Systems Inc source code.  Their license is copied below
 **   and forms the license for this code.
@@ -61,7 +62,12 @@
 **
 *******************************************************************************/
 #include "LeptonSDKEmb32OEM.h"
+#include <Arduino.h>
+#if defined(CORE_TEENSY)
 #include <i2c_t3.h>
+#else
+#include <Wire.h> 
+#endif
 
 #if (USE_BORESIGHT_MEASUREMENT_FUNCTIONS == 1)
 #include "math.h"
@@ -6180,8 +6186,10 @@ LEP_RESULT LeptonSDKEmb32OEM::DEV_I2C_MasterInit(LEP_UINT16 portID,
     LEP_RESULT result = LEP_OK;
 
     Wire.begin();
+#if defined(CORE_TEENSY)
     Wire.setClock(*BaudRate*1000);
     *BaudRate = Wire.getClock()/1000;
+#endif
 
     return(result);
 }
@@ -6207,7 +6215,11 @@ LEP_RESULT LeptonSDKEmb32OEM::DEV_I2C_MasterReset(void )
 {
    LEP_RESULT result = LEP_OK;
 
+#if defined(CORE_TEENSY)
   Wire.resetBus();
+#else
+  Wire.begin();
+#endif
 
    return(result);
 }
@@ -6246,7 +6258,13 @@ LEP_RESULT LeptonSDKEmb32OEM::DEV_I2C_MasterReadData(LEP_UINT16  portID,        
        /*
              Read back the data at the address written above
        */
+
+#if defined(CORE_TEENSY)
        bytesActuallyRead = Wire.requestFrom(deviceAddress, bytesToRead, I2C_STOP);
+#else
+       bytesActuallyRead = Wire.requestFrom((int) deviceAddress, (int) bytesToRead, 1);
+#endif
+#if defined(CORE_TEENSY)
        if (bytesActuallyRead == 0) {
           i2c_status st;
           st = Wire.status();
@@ -6295,6 +6313,7 @@ LEP_RESULT LeptonSDKEmb32OEM::DEV_I2C_MasterReadData(LEP_UINT16  portID,        
 //       } else {
 //          Serial.printf("read %d\n", bytesActuallyRead);
        }
+#endif
 /*
        if (bytesActuallyRead != bytesToRead)
        {
@@ -6312,8 +6331,13 @@ LEP_RESULT LeptonSDKEmb32OEM::DEV_I2C_MasterReadData(LEP_UINT16  portID,        
        writePtr = readDataPtr;
        while(wordsActuallyRead--)
        {
+#if defined(CORE_TEENSY)
           *writePtr  = Wire.readByte() << 8;
           *writePtr |= Wire.readByte();
+#else
+          *writePtr  = Wire.read() << 8;
+          *writePtr |= Wire.read();
+#endif
 //Serial.println(*writePtr, HEX);
           writePtr++;
        }

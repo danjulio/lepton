@@ -7,6 +7,7 @@
 **   DESCRIPTION: Lepton SDK Module ported to Arduino
 **
 **   HISTORY: 6/12/2018 DJD - Initial Draft
+**           11/22/2019 DJD - Support for ESP32
 **
 **   Based on FLIR Systems Inc source code.  Their license is copied below
 **   and forms the license for this code.
