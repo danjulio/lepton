@@ -12,6 +12,8 @@ This repository contains the companion desktop application for the tCam cameras.
 
 The application is developed using the [xojo](https://www.xojo.com) development environment.  64-bit binary images are provided for Mac OS X, Windows and x86 Linux systems.  A 32-bit binary image is provided for Raspbian.  Download the zip file for your platform.  The application can be run directly from the unzipped directory by double clicking the application binary icon.
 
+Note: Zip files for each application platform can be downloaded directly from my [website](http://danjuliodesigns.com/products/tcam_mini.html) as well.
+
 #### Platform Caveats
 
 1. You may need to make the Linux application file executable.
@@ -37,6 +39,7 @@ The preferences window is used to configure the application.  Preferences are st
 * Stream Rate - Allows setting the requested stream rate from the camera when streaming is enabled (fastest possible rate down to one image every five minutes)
 * Update Camera Clock - Causes the application to set the camera's built-in clock to the current computer time on each connection.
 * Export Resolution - Sets the size of an exported image (160x120 pixels to 640x480 pixels) and specifies if only the image or the image plus additional information is rendered to the exported file.
+* Download Folder - Sets the default folder for downloaded/saved images.
 
 ### Application Operation
 The application is oriented around radiometric image files.  It displays the last image it processed.  This may be a static image loaded from a file or taken by an attached camera.  It may also be a series of images from a video file or streamed from the camera.  Each image is displayed using a selected Palette to provide a false color image.  The 16-bit radiometric data is linearly scaled to 8-bits and the selected palette used to generate 24-bit RGB pixel colors.  When the camera is configured into AGC mode the 8-bit data from the camera is used directly with the selected palette.
@@ -68,6 +71,8 @@ Configuration items include setting the Lepton into Radiometric or AGC output mo
 WiFi items include whether the camera is acting as an Access Point (AP) or connecting to an AP (STAtion mode), the associated SSID and password and if a static IP should be set (in STA mode only - the camera always has the IP address of 192.168.4.1 in AP mode).
 
 Disabling the Camera's WiFi will disconnect it from the application.  tCam-Mini will need to have a WiFi reset performed to switch the WiFi back on.  The tCam GUI can be used to switch its Wifi back on.
+
+If you switch from a WiFI network with a password to one without be sure to select the blank password field to update so the previous password is deleted.
 
 #### Range/Palette Display
 The Range/Palette display shows the currently selected palette with a marker showing the spotmeter temperature location within the range of temperatures.  It also displays the minimum and maximum temperatures used to scale the image when the Lepton is operating in Radiometric output mode.  These temperatures are simply the minimum and maximum temperature in the image's radiometric data when Auto Range Selection is enabled.  They are the manual temperature range (set by the user in the Preferences window or automatically when the AR button is pressed) when Manual Range Selection is enabled.
@@ -104,6 +109,9 @@ The Radiometric Markers are only enabled if the displayed image contains radiome
 Clicking on a Radiometric Marker Select button enables setting the associated marker position in the displayed image.  The marker is displayed immediately since it is calculating the temperature at the location based on the existing image radiometric data.
 
 Double clicking a Radiometric Marker Select button disables the marker if it is currently displayed.
+
+#### Flat Field Correction
+Clicking on the FFC button causes the connected camera to initiate a Lepton flat field correction.
 
 #### Current Activity
 The Current Activity area displays the source of the last loaded image and its timestamp.  It also displays a pair of forward and backward buttons when browsing a folder.
@@ -216,6 +224,52 @@ In the image below the temperature of a point on the M2 trace is compared with t
 
 ![Sample Information with Baseline](pictures/sample_information_baseline.png)
 
+
+### Application Menu Items
+All functions available through controls on the Main Window are also available from the pull-down menus at the top of the window (or OS X main menu bar).
+
+The ```Application``` menu item contains two items not accessible elsewhere that provide additional functionality.
+
+1. CCI Access - Provides direct access to the Lepton Command and Control interface.
+2. Log Window - Displays a log of program status and transmitted and received packets.
+
+#### CCI Access
+The CCI Access window allows direct access to the Lepton's I2C interface as described in the Flir Lepton Software Interface Description Document.  It allows access to the Lepton CCI registers and Block Data Buffer 0 for data lengths greater than 16 DWORDs.
+
+![CCI Access](pictures/cci_access.png)
+
+You should be familiar with the Lepton CCI Interface.  It is possible to misconfigure and/or crash the Lepton or tCam camera using this interface.
+
+Operation is straight-forward.  The Command, Length and Data fields correspond directly with the associated Lepton registers.  The first sixteen Data values are associated with Data 0 - 15 for Length's of 16 DWORDs or less.  The up to 512 Data values are associated with Block Data Buffer 0 for Length's of 16 DWORDs or more.
+
+To read the Lepton configure the Command and Length and click ```READ```.  The Data fields are updated.  The Last Status field is updated with the STATUS register value after the read.
+
+To write the Lepton configure the Command, Length and Data values and click ```WRITE```.  The Last Status field is updated with the STATUS register value after the write.
+
+To run a command sequence configure the Command value and click ```RUN```.  The Last Status field is updated with the STATUS register value after the run command.
+
+The ```LOAD``` and ```SAVE``` buttons save or load values to or from a simple text file with one value per line.  The file layout is as follows.
+
+```
+	Command
+	Length
+	Data 0
+	...
+	Data <Length - 1>
+```
+
+#### Log Window
+The Log Window displays connection/disconnection status messages and logs the transmitted and received json packets to the camera.  It can be useful to understand the packet contents.
+
+![Log Window](pictures/log_window.png)
+
+It provides a simple set of controls.
+
+* Enable - Enable or disable logging.
+* Short Image Log - Shortens the approximately 55 KB image json packet to the string "RX Image...".
+* Filter Status - Filters out the ```get_status``` and ```status``` response packets which are sent periodically while the application is connected to the camera to verify connectivity.
+* Auto Scroll - Configures the window to automatically scroll when text reaches the bottom.
+* Clear - Clears all text.
 
 ### File Formats
 The application supports two file formats.

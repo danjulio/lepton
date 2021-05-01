@@ -1,4 +1,4 @@
-## FireCAM Firmware Upload
+## tCam/tCam-Mini Firmware Upload
 There are two ways to load firmware into tCam.
 
 1. Using the Espressif build process after compiling the firmware.
