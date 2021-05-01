@@ -65,9 +65,16 @@ const cmd_name_t command_list[CMD_NUM] = {
 	{CMD_SET_SPOT_S, CMD_SET_SPOT},
 	{CMD_STREAM_ON_S, CMD_STREAM_ON},
 	{CMD_STREAM_OFF_S, CMD_STREAM_OFF},
+	{CMD_TAKE_PIC_S, CMD_TAKE_PIC},
 	{CMD_RECORD_ON_S, CMD_RECORD_ON},
 	{CMD_RECORD_OFF_S, CMD_RECORD_OFF},
-	{CMD_POWEROFF_S, CMD_POWEROFF}
+	{CMD_POWEROFF_S, CMD_POWEROFF},
+	{CMD_RUN_FFC_S, CMD_RUN_FFC},
+	{CMD_GET_FS_LIST_S, CMD_GET_FS_LIST},
+	{CMD_GET_FS_FILE_S, CMD_GET_FS_FILE},
+	{CMD_DEL_FS_OBJ_S, CMD_DEL_FS_OBJ},
+	{CMD_GET_LEP_CCI_S, CMD_GET_LEP_CCI},
+	{CMD_SET_LEP_CCI_S, CMD_SET_LEP_CCI}
 };
 
 
@@ -82,6 +89,9 @@ static char* json_response_text;    // Loaded for response data
 
 static unsigned char* base64_lep_data;
 static unsigned char* base64_lep_telem_data;
+static unsigned char* base64_cci_reg_data;
+
+static uint16_t* cci_buf;           // Used to hold Lepton CCI data from cmd or for rsp
 
 
 
@@ -92,8 +102,10 @@ static bool json_add_lep_image_object(cJSON* parent, lep_buffer_t* lep_buffer);
 static void json_free_lep_base64_image();
 static bool json_add_lep_telem_object(cJSON* parent, lep_buffer_t* lep_buffer);
 static void json_free_lep_base64_telem();
+static bool json_add_cci_reg_base64_data(cJSON* parent, int len, uint16_t* buf);
+static void json_free_cci_reg_base64_data();
 static bool json_add_metadata_object(cJSON* parent);
-static int json_generate_response_string(cJSON* root);
+static uint32_t json_generate_response_string(cJSON* root, char* json_string);
 static bool json_ip_string_to_array(uint8_t* ip_array, char* ip_string);
 
 
@@ -117,6 +129,12 @@ bool json_init()
 	json_response_text = heap_caps_malloc(JSON_MAX_RSP_TEXT_LEN, MALLOC_CAP_8BIT);
 	if (json_response_text == NULL) {
 		ESP_LOGE(TAG, "Could not allocate json_response_text buffer");
+		return false;
+	}
+	
+	cci_buf = heap_caps_malloc(1024, MALLOC_CAP_SPIRAM);
+	if (cci_buf == NULL) {
+		ESP_LOGE(TAG, "Could not allocate cci data buffer");
 		return false;
 	}
 	
@@ -168,7 +186,7 @@ uint32_t json_get_image_file_string(char* json_image_text, lep_buffer_t* lep_buf
 	
 	// Pretty-print the object to our buffer
 	if (success) {
-		if (cJSON_PrintPreallocated(root, json_image_text, JSON_MAX_IMAGE_TEXT_LEN, true) == 0) {
+		if (cJSON_PrintPreallocated(root, json_image_text, JSON_MAX_IMAGE_TEXT_LEN, false) == 0) {
 			len = 0;
 		} else {
 			len = strlen(json_image_text);
@@ -212,7 +230,7 @@ char* json_get_config(uint32_t* len)
 	cJSON_AddNumberToObject(config, "gain_mode", (const double) lep_stP->gain_mode);
 	
 	// Tightly print the object into our buffer with delimitors
-	*len = json_generate_response_string(root);
+	*len = json_generate_response_string(root, json_response_text);
 	
 	cJSON_Delete(root);
 	
@@ -257,7 +275,7 @@ char* json_get_status(uint32_t* len)
 	cJSON_AddStringToObject(status, "Date", buf);
 	
 	// Tightly print the object into our buffer with delimitors
-	*len = json_generate_response_string(root);
+	*len = json_generate_response_string(root, json_response_text);
 	
 	cJSON_Delete(root);
 	
@@ -315,11 +333,81 @@ char* json_get_wifi(uint32_t* len)
 	cJSON_AddStringToObject(wifi, "cur_ip_addr", ip_string);
 	
 	// Tightly print the object into our buffer with delimitors
-	*len = json_generate_response_string(root);
+	*len = json_generate_response_string(root, json_response_text);
 	
 	cJSON_Delete(root);
 	
 	return json_response_text;
+}
+
+
+/**
+ * Return a formatted json string containing the cmd and specified length of base64-encoded
+ * CCI register data in response to the get_lep_cci/set_lep_cci command.  Include the delimiters
+ * since this string will be sent via the socket interface.
+ */
+char* json_get_cci_response(uint16_t cmd, int cci_len, uint16_t status, uint16_t* buf, uint32_t* len)
+{
+	bool success = true;
+	cJSON* root;
+	cJSON* cci_reg;
+	
+	// Create and add to the cci_reg object
+	root = cJSON_CreateObject();
+	if (root == NULL) return NULL;
+	
+	cJSON_AddItemToObject(root, "cci_reg", cci_reg=cJSON_CreateObject());
+	
+	cJSON_AddNumberToObject(cci_reg, "command", cmd);
+	cJSON_AddNumberToObject(cci_reg, "length", cci_len);
+	cJSON_AddNumberToObject(cci_reg, "status", status);
+	
+	if (cci_len != 0) {
+		success = json_add_cci_reg_base64_data(cci_reg, cci_len, buf);
+	}
+	
+	// Tightly print the object into our buffer with delimiters
+	if (success) {
+		*len = json_generate_response_string(root, json_response_text);
+		if (cci_len != 0) {
+			json_free_cci_reg_base64_data();
+		}
+	}
+	cJSON_Delete(root);
+	
+	return json_response_text;
+}
+
+
+/**
+ * Generate a formatted json string containing the numeric and string info fields.  Add
+ * delimiters for transmission over the network.  Returns string length.
+ *
+ * Note: Because this function is designed to be used by rsp_task, a valid buffer
+ *       must be passed in for json_string.
+ */
+int json_get_cam_info(char* json_string, uint32_t info_value, char* info_string)
+{
+	cJSON* root;
+	cJSON* response;
+	uint32_t len = 0;
+	
+	// Create and add to the metadata object
+	root=cJSON_CreateObject();
+	if (root != NULL) {	
+		// Create and add to the metadata object
+		cJSON_AddItemToObject(root, "cam_info", response=cJSON_CreateObject());
+		
+		cJSON_AddNumberToObject(response, "info_value", info_value);
+		cJSON_AddStringToObject(response, "info_string", info_string);
+		
+		// Tightly print the object into the buffer with delimiters
+		len = json_generate_response_string(root, json_string);
+		
+		cJSON_Delete(root);
+	}
+	
+	return (int) len;
 }
 
 
@@ -649,6 +737,84 @@ bool json_parse_stream_on(cJSON* cmd_args, uint32_t* delay_ms, uint32_t* num_fra
 
 
 /**
+ * Get the get_lep_cci arguments.  Pass our cci_buf back to the calling code to hold
+ * the read data.
+ */
+bool json_parse_get_lep_cci(cJSON* cmd_args, uint16_t* cmd, int* len, uint16_t** buf)
+{
+	int i;
+	int item_count = 0;
+	
+	if (cmd_args != NULL) {
+		if (cJSON_HasObjectItem(cmd_args, "command")) {
+			i = cJSON_GetObjectItem(cmd_args, "command")->valueint;
+			*cmd = (uint16_t) i;
+			item_count++;
+		}
+		
+		if (cJSON_HasObjectItem(cmd_args, "length")) {
+			i = cJSON_GetObjectItem(cmd_args, "length")->valueint;
+			*len = i;
+			item_count++;
+		}
+		
+		*buf = cci_buf;
+		
+		return(item_count == 2);
+	}
+	
+	return false;
+}
+
+
+/**
+ * Get the set_lep_cci arguments.  Fill our cci_buf with register data and pass it back
+ * to the calling code.
+ */
+bool json_parse_set_lep_cci(cJSON* cmd_args, uint16_t* cmd, int* len, uint16_t** buf)
+{
+	char* data;
+	int i;
+	int item_count = 0;
+	size_t dec_len;
+	
+	if (cmd_args != NULL) {
+		if (cJSON_HasObjectItem(cmd_args, "command")) {
+			i = cJSON_GetObjectItem(cmd_args, "command")->valueint;
+			*cmd = (uint16_t) i;
+			item_count++;
+		}
+		
+		if (cJSON_HasObjectItem(cmd_args, "length")) {
+			i = cJSON_GetObjectItem(cmd_args, "length")->valueint;
+			*len = i;
+			item_count++;
+		}
+		
+		if (item_count == 2) {
+			if (cJSON_HasObjectItem(cmd_args, "data")) {
+				data = cJSON_GetObjectItem(cmd_args, "data")->valuestring;
+				
+				// Decode
+				i = mbedtls_base64_decode((unsigned char*) cci_buf, *len*2, &dec_len, (const unsigned char*) data, strlen(data));
+				if (i != 0) {
+					ESP_LOGE(TAG, "Base 64 CCI Register data decode failed - %d (%d bytes decoded)", i, dec_len);
+					return false;
+				}
+			}
+		}
+		
+		*buf = cci_buf;
+		
+		return(item_count == 2);
+	}
+	
+	return false;
+}
+
+
+
+/**
  * Free the json command object
  */
 void json_free_cmd(cJSON* cmd)
@@ -776,6 +942,53 @@ static void json_free_lep_base64_telem()
 
 
 /**
+ * Add a child object containing base64 encoded CCI Register data from buf.
+ *
+ * Note: The encoded data is held in an array that must be freed with
+ * json_free_cci_reg_base64_data() after the json object is converted to a string.
+ */
+static bool json_add_cci_reg_base64_data(cJSON* parent, int len, uint16_t* buf)
+{
+	size_t base64_obj_len;
+	
+	// Get the necessary length and allocate a buffer
+	(void) mbedtls_base64_encode(base64_cci_reg_data, 0, &base64_obj_len, 
+								 (const unsigned char *) buf, len*2);
+	base64_cci_reg_data = heap_caps_malloc(base64_obj_len, MALLOC_CAP_SPIRAM);
+	
+	
+	if (base64_cci_reg_data != NULL) {
+		// Base-64 encode the CCI data
+		if (mbedtls_base64_encode(base64_cci_reg_data, base64_obj_len, &base64_obj_len, 
+							      (const unsigned char *) buf, len*2) != 0) {
+	                           
+			ESP_LOGE(TAG, "failed to encode CCI Register data base64 text");
+			free(base64_cci_reg_data);
+			return false;
+		}
+	} else {
+		ESP_LOGE(TAG, "failed to allocate %d bytes for CCI Register base64 text", base64_obj_len);
+		return false;
+	}
+	
+	// Add the encoded data as a reference since we're managing the buffer
+	cJSON_AddItemToObject(parent, "data", cJSON_CreateStringReference((char*) base64_cci_reg_data));
+	
+	return true;
+}
+
+
+/**
+ * Free the base64-encoded CCI Register data string.  Call this routine after printing the
+ * cci_reg json object.
+ */
+static void json_free_cci_reg_base64_data()
+{
+	free(base64_cci_reg_data);
+}
+
+
+/**
  * Add a child object containing image metadata to the parent.
  */
 static bool json_add_metadata_object(cJSON* parent)
@@ -813,17 +1026,17 @@ static bool json_add_metadata_object(cJSON* parent)
  * Tightly print a response into a string with delimitors for transmission over the network.
  * Returns length of the string.
  */
-static int json_generate_response_string(cJSON* root)
+static uint32_t json_generate_response_string(cJSON* root, char* json_string)
 {
-	int len;
+	uint32_t len;
 	
-	json_response_text[0] = CMD_JSON_STRING_START;
-	if (cJSON_PrintPreallocated(root, &json_response_text[1], JSON_MAX_RSP_TEXT_LEN, false) == 0) {
+	json_string[0] = CMD_JSON_STRING_START;
+	if (cJSON_PrintPreallocated(root, &json_string[1], JSON_MAX_RSP_TEXT_LEN, false) == 0) {
 		len = 0;
 	} else {
-		len = strlen(json_response_text);
-		json_response_text[len] = CMD_JSON_STRING_STOP;
-		json_response_text[len+1] = 0;
+		len = (uint32_t) strlen(json_string);
+		json_string[len] = CMD_JSON_STRING_STOP;
+		json_string[len+1] = 0;
 		len += 1;
 	}
 	

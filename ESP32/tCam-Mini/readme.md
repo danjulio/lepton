@@ -8,6 +8,8 @@ It has a I2C expansion port that I intend to use to explore adding additional se
 ### Firmware
 The "Firmware" directory contains a V4.0.2 Espressif ESP32 IDF project for tCam-Mini. You should be able to build and load it into a camera using the IDF commands (I still use "make program monitor").  There are also a set of precompiled binaries in the "precompiled" sub-directory.  You can use the Espressif tool and instructions found in the "programming" directory in parallel to this one to load those into a camera without having to build the project.
 
+Note: The precompiled firmware and Windows-based programming application can be downloaded directly from my [website](http://danjuliodesigns.com/products/tcam_mini.html) as well.
+
 ### Hardware
 The "Hardware" directory contains PCB gerbers, stencil gerbers, a BOM and a schematic PDF.  These can be used to build a tCam-Mini on the PCB I designed.  See below for instructions on building one from commonly available development boards.
 
@@ -68,9 +70,12 @@ The camera currently supports the following commands.  The communicating applica
 | --- | --- |
 | get_status | Returns a packet with camera status.  The application uses this to verify communication with the camera. |
 | get_image | Returns a packet with metadata, radiometric (or AGC) image data and Lepton telemetry objects. |
-| set_time | Set the camera's clock.  Does not return anything. |
+| set_time | Set the camera's clock. |
 | get_config | Returns a packet with the camera's current settings. |
-| set_config | Set the camera's settings.  Does not return anything. |
+| get\_lep_cci | Reads and returns specified data from the Lepton's CCI interface. |
+| run_ffc | Initiates a Lepton Flat Field Correction. |
+| set_config | Set the camera's settings. |
+| set\_lep_cci | Writes specified data to the Lepton's CCI interface. |
 | set_spotmeter | Set the spotmeter location in the Lepton.  Does  not return anything. |
 | set\_stream_on | Starts the camera streaming images and sets the interval between images and an optional number of images to stream.  Does not return anything but the camera will start generating image responses. |
 | set\_stream_off | Stops the camera from streaming images. |
@@ -81,6 +86,8 @@ The camera generates the following responses.
 
 | Response | Description |
 | --- | --- |
+| cam_info | Generic information packet from the camera.  Status for commands that do not generate a response.  May also contain alert or error messages from the camera. |
+| cci_reg | Response to both get\_cci\_reg and set\_cci\_reg commands. |
 | config | Response to get_config command. |
 | image | Response to get_image command or initiated periodically by the camera if streaming has been enabled. |
 | status | Response to get_status command. |
@@ -145,6 +152,41 @@ The get_status response may include additional information for other camera mode
 | radiometric | Base64 encoded Lepton pixel data. 19,200 16-bit words (38,400 bytes).  Each pixel contains a 16-bit absolute (Kelvin) temperature value when the Lepton is operating in Radiometric output mode.  The Lepton's gain mode specifies the resolution (0.01 K in High gain, 0.1 K in Low gain). Each pixel contains an 8-bit value when the Lepton has AGC enabled. |
 | telemetry | Base64 encoded Lepton telemetry data.  240 16-bit words (480 bytes).  See the Lepton Datasheet for a description of the telemetry contents. |
 
+#### get\_lep_cci
+```
+{
+  "cmd": "get_lep_cci",
+  "args": {
+    "command": 20172,
+    "length": 4
+  }
+}
+```
+
+| get\_lep_cci argument | Description |
+| --- | --- |
+| command | Decimal representation of the 16-bit Lepton COMMAND register value. For example, the value "20172" above is 0x4ECC (RAD Spotmeter Region of Interest). |
+| length | Decimal number of 16-bit words to read. |
+
+#### cci\_reg response (for get\_lep_cci)
+```
+{
+  "cci_reg": {
+    "command":20172,
+    "length":4,
+    "status":6,
+    "data":"OwBPADwAUAA="
+  }
+}
+```
+
+| cci_reg Item | Description |
+| --- | --- |
+| command | Decimal representation of the 16-bit Lepton COMMAND register value read. |
+| length | Decimal number of 16-bit words read. |
+| status | Decimal representation of the 16-bit Lepton STATUS register with the final status of the read. |
+| data | Base64 encoded Lepton register data. ```length``` 16-bit words.  For length <= 16 the data is from the Data Register 0 - 15.  For length > 16 the data is from Block Data Buffer 0. |
+
 #### set_time
 ```
 {
@@ -192,6 +234,19 @@ All set_time args must be included.
 | emissivity | Lepton Emissivity: 1 - 100 (integer percent) |
 | gain_mode | Lepton Gain Mode: 0: High, 1: Low, 2: Auto |
 
+#### run_ffc
+```{"cmd":"run_ffc"}```
+
+#### cam\_info response for run_ffc
+```
+{
+  "cam_info": {
+    "info_value": 1,
+    "info_string": "run_ffc success"
+  }
+}
+```
+
 #### set_config
 ```
 {
@@ -210,6 +265,43 @@ Individual args values may be left out.  The camera will use the existing value.
 | agc_enabled | Lepton AGC Mode: 1: Enabled, 0: Disabled (Radiometric output) |
 | emissivity | Lepton Emissivity: 1 - 100 (integer percent) |
 | gain_mode | Lepton Gain Mode: 0: High, 1: Low, 2: Auto |
+
+#### set\_lep_cci
+```
+{
+  "cmd":"set_lep_cci",
+  "args": {
+    "command":20173,
+    "length":4,
+    "data":"OwBPADwAUAA="
+  }
+}
+```
+
+| set\_cci_reg argument | Description |
+| --- | --- |
+| command | Decimal representation of the 16-bit Lepton COMMAND register value.  Note bit 0 must be set for a write. |
+| length | Decimal number of 16-bit words written. |
+| data | Base64 encoded Lepton register data to write. ```length``` 16-bit words.  For length <= 16 the data will be loaded into the Data Registers.  For length > 16 the data will be loaded into Block Data Buffer 0. |
+
+Note: It is possible to crash the Lepton or camera using the CCI interface.
+
+#### cci\_reg response (for set\_lep_cci)
+```
+{
+  "cci_reg": {
+    "command":20173,
+    "length":4,
+    "status":6
+  }
+}
+```
+
+| cci_reg Item | Description |
+| --- | --- |
+| command | Decimal representation of the 16-bit Lepton COMMAND register value.  Note bit 0 will be set for a write. |
+| length | Decimal number of 16-bit words written. |
+| status | Decimal representation of the 16-bit Lepton STATUS register with the final status of the write. |
 
 #### set_spotmeter
 ```
@@ -330,12 +422,40 @@ Only a subset of the flags argument are used to configure WiFi operation.  Other
 | 4 | Static IP - Set to 1 to use a Static IP, 0 to request an IP via DHCP when operating in Client mode. |
 | 0 | Bit 0: Wifi Enabled - Set to 1 to enable Wifi, 0 to disable Wifi. |
 
+#### cam_info messages
+The ```cam_info``` response is generated for commands that do not return a response such as ```set_clock```, ```set_config``` or ```set_wifi``` with status about the success or failure of the command.  It can also be generated by the camera for certain errors.
+
+For example, ```cam_info``` for ```set_clock``` looks like.
+
+```
+{
+  "cam_info": {
+    "info_value": 1,
+    "info_string": "set_clock success"
+  }
+}
+```
+
+| cam_info Item | Description |
+| --- | --- |
+| info_value | A decimal status code (see below). |
+| info_string | An information string. |
+
+| cam_info status code | Description |
+| --- | --- |
+| 0 | Command NACK - the command failed.  See the information string for more information. |
+| 1 | Command ACK - the command succeeded. |
+| 2 | Command unimplemented - the camera firmware does not implement the command. |
+| 3 | Command bad - the command was incorrectly formatted or was not a json string. |
+| 4 | Internal Error - the camera detected an internal error.  See the information string for more information. |
+| 5 | Debug Message - The information string contains an internal debug message from the camera (not normally generated). |
+
 #### Streaming (and a performance note)
 Streaming is a slightly special case for the command interface.  Responses are only generated after receiving the associated get command.  However the image response is generated repeatedly by the camera after streaming has been enabled at the rate, and for the number of times, specified in the set\_stream\_on command.
 
 While the task that services the Lepton is capable of getting the maximum 8.7 fps frame-rate out of the sensor, the task generating the image response and sending it through the ESP32's network and Wifi stacks can't quite keep up.  It appears that the time required to send the data over the ESP32's Wifi interface varies depending on a several factors including the ESP32 antenna. I get better performance using an ESP32 module with an external antenna than with the built-in PCB antenna.
 
-Typical streaming rates vary from about 5-7 fps.  The fps display on the companion application will dip every time the Lepton performs a FFC because it is averaging over several seconds and the camera stops sending images during the FFC (about 1.5 seconds).
+Typical streaming rates vary from about 5-8 fps.  The fps display on the companion application will dip every time the Lepton performs a FFC because it is averaging over several seconds and the camera stops sending images during the FFC (about 1.5 seconds).
  
 ### Prototype
 My first tCam-Mini was built using a Sparkfun ESP32 Thing+ and a Lepton Breakout board from Group Gets.  I added an external PSRAM for more buffer space and a red/green LED (with current limiting resistors).  The GPIO0 button is the WiFi Reset Button.

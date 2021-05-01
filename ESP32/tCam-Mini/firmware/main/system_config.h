@@ -96,18 +96,18 @@
 #define JSON_MAX_IMAGE_TEXT_LEN (1024 * 54)
 
 // Max command response json object text size
-#define JSON_MAX_RSP_TEXT_LEN   1024
+#define JSON_MAX_RSP_TEXT_LEN   2048
 
 // Command Response Buffer Size (large enough for several responses)
 #define CMD_RESPONSE_BUFFER_LEN (JSON_MAX_RSP_TEXT_LEN * 4)
 
 // Maximum incoming command json string length (large enough for longest command)
-#define JSON_MAX_CMD_TEXT_LEN   256
+#define JSON_MAX_CMD_TEXT_LEN   2048
 
 // Maximum TCP/IP Socket receiver buffer
 //  This should be large enough for the maximum number of command received at a time
 //  (probably 2 is ok)
-#define CMD_MAX_TCP_RX_BUFFER_LEN 1024
+#define CMD_MAX_TCP_RX_BUFFER_LEN 4096
 
 // TCP/IP listening port
 #define CMD_PORT 5001

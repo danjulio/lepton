@@ -24,6 +24,7 @@
 #include "cmd_task.h"
 #include "ctrl_task.h"
 #include "rsp_task.h"
+#include "cci.h"
 #include "json_utilities.h"
 #include "lepton_utilities.h"
 #include "ps_utilities.h"
@@ -40,6 +41,17 @@
 #include "lwip/sockets.h"
 #include "lwip/sys.h"
 #include <lwip/netdb.h>
+
+
+
+//
+// CMD Task private constants
+//
+
+// Uncomment to print commands
+//#define DEBUG_CMD
+
+
 
 //
 // CMD Task variables
@@ -69,11 +81,13 @@ static void push_rx_data(char* data, int len);
 static bool process_rx_data();
 static void process_rx_packet();
 static void push_response(char* buf, uint32_t len);
-static void process_set_config(cJSON* cmd_args);
-static void process_set_spotmeter(cJSON* cmd_args);
-static void process_stream_on(cJSON* cmd_args);
-static void process_set_time(cJSON* cmd_args);
-static void process_set_wifi(cJSON* cmd_args);
+static bool process_set_config(cJSON* cmd_args);
+static bool process_set_spotmeter(cJSON* cmd_args);
+static bool process_stream_on(cJSON* cmd_args);
+static bool process_set_time(cJSON* cmd_args);
+static bool process_set_wifi(cJSON* cmd_args);
+static bool process_get_lep_cci(cJSON* cmd_args);
+static bool process_set_lep_cci(cJSON* cmd_args);
 static int in_buffer(char c);
 
 
@@ -297,17 +311,30 @@ static void process_rx_packet()
 	cJSON* json_obj;
 	cJSON* cmd_args;
 	int cmd;
+	int cmd_success = -1;  // -1: response sent (as ACK), 0: determined elsewhere, 1: success,
+						   //  2: fail, 3: unimplemented, 4: unknown cmd, 5: unknown json, 6: bad json
+	char cmd_st_buf[80];
 	static char* response_buffer;
 	static uint32_t response_length;
 	
 	// Create a json object to parse
 	json_obj = json_get_cmd_object(json_cmd_string);
+#ifdef DEBUG_CMD
+	ESP_LOGI(TAG, "RX %s", json_cmd_string); 
+#endif
 	if (json_obj != NULL) {
 		if (json_parse_cmd(json_obj, &cmd, &cmd_args)) {
+#ifdef DEBUG_CMD
+			ESP_LOGI(TAG, "cmd %s", json_get_cmd_name(cmd));
+#endif
 			switch (cmd) {
 				case CMD_GET_STATUS:
 					response_buffer = json_get_status(&response_length);
-					push_response(response_buffer, response_length);
+					if (response_length != 0) {
+						push_response(response_buffer, response_length);
+					} else {
+						cmd_success = 2;
+					}
 					break;
 					
 				case CMD_GET_IMAGE:
@@ -315,55 +342,144 @@ static void process_rx_packet()
 					break;
 					
 				case CMD_SET_TIME:					
-					process_set_time(cmd_args);
+					if (process_set_time(cmd_args)) {
+						cmd_success = 1;
+					} else {
+						cmd_success = 2;
+					}
 					break;
 				
 				case CMD_GET_WIFI:
 					response_buffer = json_get_wifi(&response_length);
-					push_response(response_buffer, response_length);
+					if (response_length != 0) {
+						push_response(response_buffer, response_length);
+					} else {
+						cmd_success = 2;
+					}
 					break;
 					
 				case CMD_SET_WIFI:
-					process_set_wifi(cmd_args);
+					if (process_set_wifi(cmd_args)) {
+						if (wifi_reinit()) {
+							cmd_success = 1;
+						} else {
+							ESP_LOGE(TAG, "Could not restart WiFi with the new configuration");
+							rsp_set_cam_info_msg(RSP_INFO_CMD_NACK, "Could not restart WiFi with the new configuration");
+							xTaskNotify(task_handle_rsp, RSP_NOTIFY_CAM_INFO_MASK, eSetBits);
+						}
+					} else {
+						cmd_success = 2;
+					}
 					break;
 				
 				case CMD_GET_CONFIG:
 					response_buffer = json_get_config(&response_length);
-					push_response(response_buffer, response_length);
+					if (response_length != 0) {
+						push_response(response_buffer, response_length);
+					} else {
+						cmd_success = 2;
+					}
 					break;
 					
 				case CMD_SET_CONFIG:
-					process_set_config(cmd_args);
+					if (process_set_config(cmd_args)) {
+						cmd_success = 1;
+					} else {
+						cmd_success = 2;
+					}
 					break;
 				
 				case CMD_SET_SPOT:
-					process_set_spotmeter(cmd_args);
+					if (process_set_spotmeter(cmd_args)) {
+						cmd_success = 1;
+					} else {
+						cmd_success = 2;
+					}
 					break;
 				
 				case CMD_STREAM_ON:
-					process_stream_on(cmd_args);
+					if (process_stream_on(cmd_args)) {
+						cmd_success = 1;
+					} else {
+						cmd_success = 2;
+					}
 					break;
 				
 				case CMD_STREAM_OFF:
 					xTaskNotify(task_handle_rsp, RSP_NOTIFY_CMD_STREAM_OFF_MASK, eSetBits);
+					cmd_success = 1;
 					break;
-						
+				
+				case CMD_RUN_FFC:
+					cci_run_ffc();
+					cmd_success = 1;
+					break;
+				
+				case CMD_GET_LEP_CCI:
+					if (!process_get_lep_cci(cmd_args)) {
+						cmd_success = 2;
+					}
+					break;
+				
+				case CMD_SET_LEP_CCI:
+					if (!process_set_lep_cci(cmd_args)) {
+						cmd_success = 2;
+					}
+					break;
+				
+				case CMD_TAKE_PIC:
 				case CMD_RECORD_ON:			
 				case CMD_RECORD_OFF:
 				case CMD_POWEROFF:
-					ESP_LOGE(TAG, "Unsupported command in json string: %s", json_cmd_string);
+				case CMD_GET_FS_LIST:
+				case CMD_GET_FS_FILE:
+				case CMD_DEL_FS_OBJ:
+					cmd_success = 3;
 					break;
 				
 				default:
-					ESP_LOGE(TAG, "Unknown command in json string: %s", json_cmd_string);
+					cmd_success = 4;
 			}
 		} else {
-			ESP_LOGE(TAG, "Unknown type of json string: %s", json_cmd_string);
+			cmd_success = 5;
 		}
 		
 		json_free_cmd(json_obj);
 	} else {
-		ESP_LOGE(TAG, "Couldn't convert json string: %s", json_cmd_string);
+		cmd_success = 6;
+	}
+	
+	// Determine command response to send
+	switch (cmd_success) {
+		// case -1 does not send message (command response is message)
+		// case 0 "determined later" does not send a message at this point
+		case 1:
+			sprintf(cmd_st_buf, "%s success", json_get_cmd_name(cmd));
+			rsp_set_cam_info_msg(RSP_INFO_CMD_ACK, cmd_st_buf);
+			break;
+		case 2:
+			sprintf(cmd_st_buf, "%s failed", json_get_cmd_name(cmd));
+			rsp_set_cam_info_msg(RSP_INFO_CMD_NACK, cmd_st_buf);
+			break;
+		case 3:
+			sprintf(cmd_st_buf, "Unsupported command in json string");
+			rsp_set_cam_info_msg(RSP_INFO_CMD_UNIMPL, cmd_st_buf);
+			break;
+		case 4:
+			sprintf(cmd_st_buf, "Unknown command in json string");
+			rsp_set_cam_info_msg(RSP_INFO_CMD_UNIMPL, cmd_st_buf);
+			break;
+		case 5:
+			sprintf(cmd_st_buf, "Json string wasn't command");
+			rsp_set_cam_info_msg(RSP_INFO_CMD_UNIMPL, cmd_st_buf);
+			break;
+		case 6:
+			sprintf(cmd_st_buf, "Couldn't convert json string");
+			rsp_set_cam_info_msg(RSP_INFO_CMD_BAD, cmd_st_buf);
+			break;
+	}
+	if (cmd_success > 0) {
+		xTaskNotify(task_handle_rsp, RSP_NOTIFY_CAM_INFO_MASK, eSetBits);
 	}
 }
 
@@ -401,7 +517,7 @@ static void push_response(char* buf, uint32_t len)
 /**
  * Routines to process commands
  */
-static void process_set_config(cJSON* cmd_args)
+static bool process_set_config(cJSON* cmd_args)
 {
 	json_config_t new_config_st;
 	
@@ -420,42 +536,54 @@ static void process_set_config(cJSON* cmd_args)
 			lep_st.gain_mode = new_config_st.gain_mode;
 		}
 		ps_set_lep_state(&lep_st);
+		return true;
 	}
+	
+	return false;
 }
 
 
-static void process_set_spotmeter(cJSON* cmd_args)
+static bool process_set_spotmeter(cJSON* cmd_args)
 {
 	uint16_t r1, c1, r2, c2;
 	
 	if (json_parse_set_spotmeter(cmd_args, &r1, &c1, &r2, &c2)) {
 		lepton_spotmeter(r1, c1, r2, c2);
+		return true;
 	}
+	
+	return false;
 }
 
 
-static void process_stream_on(cJSON* cmd_args)
+static bool process_stream_on(cJSON* cmd_args)
 {
 	uint32_t delay_ms, num_frames;
 	
 	if (json_parse_stream_on(cmd_args, &delay_ms, &num_frames)) {
 		rsp_set_stream_parameters(delay_ms, num_frames);
 		xTaskNotify(task_handle_rsp, RSP_NOTIFY_CMD_STREAM_ON_MASK, eSetBits);
+		return true;
 	}
+	
+	return false;
 }
 
 
-static void process_set_time(cJSON* cmd_args)
+static bool process_set_time(cJSON* cmd_args)
 {
 	tmElements_t te;
 	
 	if (json_parse_set_time(cmd_args, &te)) {
 		time_set(te);
+		return true;
 	}
+	
+	return false;
 }
 
 
-static void process_set_wifi(cJSON* cmd_args)
+static bool process_set_wifi(cJSON* cmd_args)
 {
 	char ap_ssid[PS_SSID_MAX_LEN+1];
 	char sta_ssid[PS_SSID_MAX_LEN+1];
@@ -470,10 +598,56 @@ static void process_set_wifi(cJSON* cmd_args)
 	
 	if (json_parse_set_wifi(cmd_args, &new_wifi_info)) {
 		ps_set_wifi_info(&new_wifi_info);
-		if (!wifi_reinit()) {
-			ESP_LOGE(TAG, "Could not restart WiFi with the new configuration");
+		return true;
+	}
+	
+	return false;
+}
+
+
+static bool process_get_lep_cci(cJSON* cmd_args)
+{
+	char* response_buffer;
+	int len;
+	uint16_t cmd;
+	uint16_t status;
+	uint16_t* cci_buf;
+	uint32_t response_length;
+	
+	if (json_parse_get_lep_cci(cmd_args, &cmd, &len, &cci_buf)) {
+		cci_get_reg(cmd, len, cci_buf);
+		if (cci_command_success(&status)) {
+			response_buffer = json_get_cci_response(cmd, len, status, cci_buf, &response_length);
+			push_response(response_buffer, response_length);
+			return true;
 		}
 	}
+	
+	return false;
+}
+
+
+static bool process_set_lep_cci(cJSON* cmd_args)
+{
+	char* response_buffer;
+	int len;
+	uint16_t cmd;
+	uint16_t status;
+	uint16_t* cci_buf;
+	uint32_t response_length;
+	
+	if (json_parse_set_lep_cci(cmd_args, &cmd, &len, &cci_buf)) {
+		cci_set_reg(cmd, len, cci_buf);
+		
+		if (cci_command_success(&status)) {
+			// Just return status by setting len = 0
+			response_buffer = json_get_cci_response(cmd, 0, status, cci_buf, &response_length);
+			push_response(response_buffer, response_length);
+			return true;
+		}
+	}
+	
+	return false;
 }
 
 

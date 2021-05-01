@@ -51,12 +51,16 @@ uint32_t json_get_image_file_string(char* json_image_text, lep_buffer_t* lep_buf
 char* json_get_config(uint32_t* len);
 char* json_get_status(uint32_t* len);
 char* json_get_wifi(uint32_t* len);
+char* json_get_cci_response(uint16_t cmd, int cci_len, uint16_t status, uint16_t* buf, uint32_t* len);
+int json_get_cam_info(char* json_string, uint32_t info_value, char* info_string);
 bool json_parse_cmd(cJSON* cmd_obj, int* cmd, cJSON** cmd_args);
 bool json_parse_set_config(cJSON* cmd_args, json_config_t* new_st);
 bool json_parse_set_spotmeter(cJSON* cmd_args, uint16_t* r1, uint16_t* c1, uint16_t* r2, uint16_t* c2);
 bool json_parse_set_time(cJSON* cmd_args, tmElements_t* te);
 bool json_parse_set_wifi(cJSON* cmd_args, wifi_info_t* new_wifi_info);
 bool json_parse_stream_on(cJSON* cmd_args, uint32_t* delay_ms, uint32_t* num_frames);
+bool json_parse_get_lep_cci(cJSON* cmd_args, uint16_t* cmd, int* len, uint16_t** buf);
+bool json_parse_set_lep_cci(cJSON* cmd_args, uint16_t* cmd, int* len, uint16_t** buf);
 void json_free_cmd(cJSON* cmd);
 const char* json_get_cmd_name(int cmd);
 #endif /* JSON_UTILITIES_H */

@@ -57,6 +57,8 @@
 #define CCI_REG_DATA_13 0x0022
 #define CCI_REG_DATA_14 0x0024
 #define CCI_REG_DATA_15 0x0026
+#define CCI_BLOCK_BUF_0 0xF800
+#define CCI_BLOCK_BUF_1 0xFC00
 
 // Commands
 #define CCI_CMD_SYS_RUN_PING 0x0202
@@ -172,14 +174,12 @@ typedef struct {
 //
 
 // Setup
-int cci_init();
+bool cci_init();
 
-// Primative methods
-int cci_write_register(uint16_t reg, uint16_t value);
-uint16_t cci_read_register(uint16_t reg);
-uint32_t cci_wait_busy_clear();
-void cci_wait_busy_clear_check(char* cmd);
-bool cci_command_success();
+// Generic access
+void cci_set_reg(uint16_t cmd, int len, uint16_t* buf);
+void cci_get_reg(uint16_t cmd, int len, uint16_t* buf);
+bool cci_command_success(uint16_t* status);
 
 // Module: SYS
 uint32_t cci_run_ping();

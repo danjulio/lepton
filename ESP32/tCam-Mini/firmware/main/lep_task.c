@@ -81,6 +81,14 @@ void lep_task()
 	
 	ESP_LOGI(TAG, "Start task");
 	
+	// Attempt to initialize the CCI interface
+	if (!cci_init()) {
+		ESP_LOGE(TAG, "Lepton CCI initialization failed");
+		rsp_set_cam_info_msg(RSP_INFO_INT_ERROR, "(FATAL) Lepton CCI initialization failed");
+		xTaskNotify(task_handle_rsp, RSP_NOTIFY_CAM_INFO_MASK, eSetBits);
+		vTaskDelete(NULL);
+	}
+	
 	// Attempt to initialize the VoSPI interface
 	if (vospi_init() != ESP_OK) {
 		ESP_LOGE(TAG, "Lepton VoSPI initialization failed");

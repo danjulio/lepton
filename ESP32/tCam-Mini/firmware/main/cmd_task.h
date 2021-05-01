@@ -34,21 +34,28 @@
 //
 
 // Commands
-#define CMD_GET_STATUS 0
-#define CMD_GET_IMAGE  1
-#define CMD_SET_TIME   2
-#define CMD_GET_WIFI   3
-#define CMD_SET_WIFI   4
-#define CMD_GET_CONFIG 5
-#define CMD_SET_CONFIG 6
-#define CMD_SET_SPOT   7
-#define CMD_STREAM_ON  8
-#define CMD_STREAM_OFF 9
-#define CMD_RECORD_ON  10
-#define CMD_RECORD_OFF 11
-#define CMD_POWEROFF   12
-#define CMD_UNKNOWN    13
-#define CMD_NUM        13
+#define CMD_GET_STATUS  0
+#define CMD_GET_IMAGE   1
+#define CMD_SET_TIME    2
+#define CMD_GET_WIFI    3
+#define CMD_SET_WIFI    4
+#define CMD_GET_CONFIG  5
+#define CMD_SET_CONFIG  6
+#define CMD_SET_SPOT    7
+#define CMD_STREAM_ON   8
+#define CMD_STREAM_OFF  9
+#define CMD_TAKE_PIC    10
+#define CMD_RECORD_ON   11
+#define CMD_RECORD_OFF  12
+#define CMD_POWEROFF    13
+#define CMD_RUN_FFC     14
+#define CMD_GET_FS_LIST 15
+#define CMD_GET_FS_FILE 16
+#define CMD_DEL_FS_OBJ  17
+#define CMD_GET_LEP_CCI 18
+#define CMD_SET_LEP_CCI 19
+#define CMD_UNKNOWN     20
+#define CMD_NUM         21
 
 // Command strings
 #define CMD_GET_STATUS_S "get_status"
@@ -61,17 +68,22 @@
 #define CMD_SET_SPOT_S   "set_spotmeter"
 #define CMD_STREAM_ON_S  "stream_on"
 #define CMD_STREAM_OFF_S "stream_off"
+#define CMD_TAKE_PIC_S   "take_picture"
 #define CMD_RECORD_ON_S  "record_on"
 #define CMD_RECORD_OFF_S "record_off"
 #define CMD_POWEROFF_S   "poweroff"
+#define CMD_RUN_FFC_S    "run_ffc"
+#define CMD_GET_FS_LIST_S "get_filesystem_list"
+#define CMD_GET_FS_FILE_S "get_file"
+#define CMD_DEL_FS_OBJ_S  "delete_filesystem_obj"
+#define CMD_GET_LEP_CCI_S "get_lep_cci"
+#define CMD_SET_LEP_CCI_S "set_lep_cci"
+
 
 // Delimiters used to wrap json strings sent over the network
 #define CMD_JSON_STRING_START 0x02
 #define CMD_JSON_STRING_STOP  0x03
 
-
-
-// Command Task notifications
 
 
 //

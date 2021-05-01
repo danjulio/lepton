@@ -71,9 +71,7 @@ json_config_t lep_st;
 lep_buffer_t rsp_lep_buffer[2];   // Ping-pong buffer loaded by lep_task for rsp_task
 
 // Big buffers
-json_image_string_t sys_image_file_buffer;   // Used by file_task for json formatted image data
-json_image_string_t sys_image_rsp_buffer;    // Used by rsp_task for json formatted image data
-
+json_image_string_t sys_image_rsp_buffer;          // Used by rsp_task for json formatted image data
 json_cmd_response_queue_t sys_cmd_response_buffer; // Loaded by cmd_task with json formatted response data
 
 
@@ -155,22 +153,22 @@ bool system_buffer_init()
 	ESP_LOGI(TAG, "Buffer Allocation");
 	
 	// Allocate the LEP/RSP task lepton frame and telemetry ping-pong buffers
-	rsp_lep_buffer[0].lep_bufferP = heap_caps_malloc(LEP_NUM_PIXELS*2, MALLOC_CAP_SPIRAM);
+	rsp_lep_buffer[0].lep_bufferP = heap_caps_malloc(LEP_NUM_PIXELS*2, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
 	if (rsp_lep_buffer[0].lep_bufferP == NULL) {
 		ESP_LOGE(TAG, "malloc RSP lepton shared image buffer 0 failed");
 		return false;
 	}
-	rsp_lep_buffer[0].lep_telemP = heap_caps_malloc(LEP_TEL_WORDS*2, MALLOC_CAP_SPIRAM);
+	rsp_lep_buffer[0].lep_telemP = heap_caps_malloc(LEP_TEL_WORDS*2, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
 	if (rsp_lep_buffer[0].lep_telemP == NULL) {
 		ESP_LOGE(TAG, "malloc RSP lepton shared telemetry buffer 0 failed");
 		return false;
 	}
-	rsp_lep_buffer[1].lep_bufferP = heap_caps_malloc(LEP_NUM_PIXELS*2, MALLOC_CAP_SPIRAM);
+	rsp_lep_buffer[1].lep_bufferP = heap_caps_malloc(LEP_NUM_PIXELS*2, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
 	if (rsp_lep_buffer[1].lep_bufferP == NULL) {
 		ESP_LOGE(TAG, "malloc RSP lepton shared image buffer 1 failed");
 		return false;
 	}
-	rsp_lep_buffer[1].lep_telemP = heap_caps_malloc(LEP_TEL_WORDS*2, MALLOC_CAP_SPIRAM);
+	rsp_lep_buffer[1].lep_telemP = heap_caps_malloc(LEP_TEL_WORDS*2, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
 	if (rsp_lep_buffer[1].lep_telemP == NULL) {
 		ESP_LOGE(TAG, "malloc RSP lepton shared telemetry buffer 1 failed");
 		return false;

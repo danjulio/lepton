@@ -33,6 +33,14 @@
 // RSP Task Constants
 //
 
+// Info Message values
+#define RSP_INFO_CMD_NACK     0
+#define RSP_INFO_CMD_ACK      1
+#define RSP_INFO_CMD_UNIMPL   2
+#define RSP_INFO_CMD_BAD      3
+#define RSP_INFO_INT_ERROR    4
+#define RSP_INFO_DEBUG_MSG    5
+
 // Task evaluation interval
 #define RSP_TASK_EVAL_NORM_MSEC 50
 #define RSP_TASK_EVAL_FAST_MSEC 20
@@ -40,17 +48,24 @@
 // Maximum send packet size (less than a MTU)
 #define RSP_MAX_TX_PKT_LEN 1280
 
+// Maximum cam_info string length
+#define RSP_MAX_CAM_INFO_LEN 128
+
 // Response Task notifications
 #define RSP_NOTIFY_CMD_GET_IMG_MASK    0x00000001
 #define RSP_NOTIFY_CMD_STREAM_ON_MASK  0x00000002
 #define RSP_NOTIFY_CMD_STREAM_OFF_MASK 0x00000004
 #define RSP_NOTIFY_LEP_FRAME_MASK_0    0x00000010
 #define RSP_NOTIFY_LEP_FRAME_MASK_1    0x00000020
+#define RSP_NOTIFY_CAM_INFO_MASK       0x00000100
+
+
 
 //
 // RSP Task API
 //
 void rsp_task();
 void rsp_set_stream_parameters(uint32_t delay_ms, uint32_t num_frames);
+void rsp_set_cam_info_msg(uint32_t info_value, char* info_string);
 
 #endif /* RSP_TASK_H */

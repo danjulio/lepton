@@ -108,11 +108,9 @@ extern json_config_t lep_st;
 extern lep_buffer_t rsp_lep_buffer[2];   // Ping-pong buffer loaded by lep_task for rsp_task
 
 // Big buffers
-extern json_image_string_t sys_image_rsp_buffer;    // Used by rsp_task for json formatted image data
-
+extern json_image_string_t sys_image_rsp_buffer;          // Used by rsp_task for json formatted image data
 extern json_cmd_response_queue_t sys_cmd_response_buffer; // Loaded by cmd_task with json formatted response data
 
-extern uint16_t* gui_lep_bufferP;    // Loaded by gui_task for its own use
 
 
 //

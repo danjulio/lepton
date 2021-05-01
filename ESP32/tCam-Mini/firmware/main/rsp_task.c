@@ -71,6 +71,12 @@ static uint32_t cur_stream_frame_num;
 static uint32_t stream_remaining_frames;        // Remaining frames to stream
 static int64_t stream_ready_usec;               // Next ESP32 uSec timestamp to send image
 
+// cam_info packet components
+static SemaphoreHandle_t cam_info_mutex;
+static uint32_t cam_info_value;
+static char cam_info_string[RSP_MAX_CAM_INFO_LEN];
+static bool send_cam_info;
+
 // Command Response buffer (holds single responses from the cmd_task)
 static char cmd_task_response_buffer[JSON_MAX_RSP_TEXT_LEN];
 
@@ -100,6 +106,7 @@ void rsp_task()
 	ESP_LOGI(TAG, "Start task");
 	
 	init_state();
+	cam_info_mutex = xSemaphoreCreateMutex();
 	
 	while (1) {
 		// Evaluate streaming conditions for ready to send image if enabled before
@@ -158,6 +165,17 @@ void rsp_task()
 			}
 		}
 		
+		if (send_cam_info) {
+			// Generate a cam_info string and send it if possible
+			xSemaphoreTake(cam_info_mutex, portMAX_DELAY);
+			len = json_get_cam_info(cmd_task_response_buffer, cam_info_value, cam_info_string);
+			xSemaphoreGive(cam_info_mutex);
+			if (connected && (len != 0)) {
+				send_response(cmd_task_response_buffer, len);
+			}
+			send_cam_info = false;
+		}
+		
 		// Sleep task - less if we are streaming
 		if (stream_on) {
 			vTaskDelay(pdMS_TO_TICKS(RSP_TASK_EVAL_FAST_MSEC));
@@ -174,6 +192,28 @@ void rsp_set_stream_parameters(uint32_t delay_ms, uint32_t num_frames)
 	next_stream_frame_delay_msec = delay_ms;
 	next_stream_frame_num = num_frames;
 }
+
+
+// Called before sending RSP_NOTIFY_CAM_INFO_MASK
+void rsp_set_cam_info_msg(uint32_t info_value, char* info_string)
+{
+	char c;
+	int i = 0;
+	
+	xSemaphoreTake(cam_info_mutex, portMAX_DELAY);
+	
+	cam_info_value = info_value;
+	
+	c = *info_string;
+	while ((i < (RSP_MAX_CAM_INFO_LEN-1)) && (c != 0)) {
+		cam_info_string[i++] = c;
+		c = *(info_string + i);
+	}
+	cam_info_string[i] = 0; // terminate
+	
+	xSemaphoreGive(cam_info_mutex);
+}
+
 
 
 //
@@ -228,7 +268,9 @@ static void handle_notifications()
 	
 	notification_value = 0;
 	if (xTaskNotifyWait(0x00, 0xFFFFFFFF, &notification_value, 0)) {
+		//
 		// Handle cmd_task notifications
+		//
 		if (Notification(notification_value, RSP_NOTIFY_CMD_GET_IMG_MASK)) {
 			// Note to process the next received image
 			image_pending = true;
@@ -256,7 +298,9 @@ static void handle_notifications()
 			stream_on = false;
 		}
 		
+		//
 		// Handle lep_task notifications
+		//
 		if (Notification(notification_value, RSP_NOTIFY_LEP_FRAME_MASK_0)) {
 			if (image_pending) {
 				got_image_0 = true;
@@ -268,6 +312,13 @@ static void handle_notifications()
 				got_image_1 = true;
 				image_pending = false;
 			}
+		}
+		
+		//
+		// Notifications to send back to the controlling software
+		//
+		if (Notification(notification_value, RSP_NOTIFY_CAM_INFO_MASK)) {
+			send_cam_info = true;
 		}
 	}
 }
