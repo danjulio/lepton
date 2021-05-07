@@ -84,8 +84,12 @@ class TCamManagerThread(Thread):
                 cmdType = cmd.get("cmd")
                 if cmdType == "connect":
                     tcamSocket = self.createSocket()
-                    tcamSocket.connect((cmd["ipaddress"], cmd["port"]))
-                    self.responseQueue.put({"status": "connected"})
+                    try:
+                        tcamSocket.connect((cmd["ipaddress"], cmd["port"]))
+                    except socket.timeout:
+                        self.responseQueue.put({"status": "timeout"})
+                    else:
+                       self.responseQueue.put({"status": "connected"})
                 elif cmdType == "disconnect":
                     tcamSocket.close()
                     tcamSocket = None
@@ -194,16 +198,22 @@ class TCam:
 
     ##########################################################################################
     # Image/sensor array commands
-    def start_stream(self, delay_msec=0, num_frames=0, callback=None):
+    def start_stream(self, delay_msec=0, num_frames=0, timeout=None):
+        if not timeout:
+            timeout = self.responseTimeout
         cmd = {
             "cmd": "stream_on",
             "args": {"delay_msec": delay_msec, "num_frames": num_frames},
         }
         self.cmdQueue.put(cmd)
+        return self.responseQueue.get(block=True, timeout=timeout)
 
-    def stop_stream(self):
+    def stop_stream(self, timeout=None):
+        if not timeout:
+            timeout = self.responseTimeout
         cmd = {"cmd": "stream_off"}
         self.cmdQueue.put(cmd)
+        return self.responseQueue.get(block=True, timeout=timeout)
 
     def get_image(self, timeout=None):
         cmd = {"cmd": "get_image"}
@@ -220,6 +230,13 @@ class TCam:
 
     def frame_count(self):
         return self.frameQueue.qsize()
+
+    def run_ffc(self, timeout=None):
+        if not timeout:
+            timeout = self.responseTimeout
+        cmd = {"cmd": "run_ffc"}
+        self.cmdQueue.put(cmd)
+        return self.responseQueue.get(block=True, timeout=timeout)
 
     ##########################################################################################
     # all of the set and get functions
@@ -239,8 +256,10 @@ class TCam:
         day=None,
         month=None,
         year=None,
+        timeout=None
     ):
-
+        if not timeout:
+            timeout = self.responseTimeout
         cmd = {
             "cmd": "set_time",
             "args": {
@@ -254,13 +273,18 @@ class TCam:
             },
         }
         self.cmdQueue.put(cmd)
+        return self.responseQueue.get(block=True, timeout=timeout)
 
-    def get_config(self):
+    def get_config(self, timeout=None):
+        if not timeout:
+            timeout = self.responseTimeout
         cmd = {"cmd": "get_config"}
         self.cmdQueue.put(cmd)
-        return self.responseQueue.get(block=True, timeout=self.responseTimeout)
+        return self.responseQueue.get(block=True, timeout=timeout)
 
-    def set_config(self, agc_enabled=1, emissivity=98, gain_mode=2):
+    def set_config(self, agc_enabled=1, emissivity=98, gain_mode=2, timeout=None):
+        if not timeout:
+            timeout = self.responseTimeout
         cmd = {
             "cmd": "set_config",
             "args": {
@@ -270,8 +294,46 @@ class TCam:
             },
         }
         self.cmdQueue.put(cmd)
+        return self.responseQueue.get(block=True, timeout=timeout)
 
-    def set_spotmeter(self, c1=79, c2=80, r1=59, r2=60):
+    def get_lep_cci(self, command=0x4ECC, length=4, timeout=None):
+        """
+        get_lep_cci()
+        
+        Default values are Command: RAD Spotmeter Region of Interest, Length: 4 DWORDS
+        """
+        if not timeout:
+            timeout = self.responseTimeout
+        cmd = {
+            "cmd": "get_lep_cci",
+            "args": {
+                "command": command,
+                "length": length
+            }
+        }
+        self.cmdQueue.put(cmd)
+        return self.responseQueue.get(block=True, timeout=timeout)
+
+    def set_lep_cci(self, command, data, timeout=None):
+        try:
+            dataArray = array.array('H', data)
+        except OverflowError as e:
+            raise ValueError(f"A value in data list is not within the 0-65535 bounds of a 16 bit UInt. {e}")
+        if not timeout:
+            timeout = self.responseTimeout
+        encodedData = base64.b64encode(dataArray.tobytes())
+        cmd = {
+            "cmd": "set_lep_cci",
+            "args": {
+                "command": command,
+                "length": len(dataArray),
+                "data": encodedData
+             }
+        }
+        self.cmdQueue.put(cmd)
+        return self.responseQueue.get(block=True, timeout=self.responseTimeout)
+
+    def set_spotmeter(self, c1=79, c2=80, r1=59, r2=60, timeout=None):
         """
         set_spotmeter()
 
@@ -282,17 +344,22 @@ class TCam:
         r1 == Spotmeter row 1: Top Y-axis spotmeter box coordinate (0-119)
         r2 == Spotmeter row 2: Bottom Y-axis spotmeter box coordinate (0-119)
         """
+        if not timeout:
+            timeout = self.responseTimeout
         cmd = {"cmd": "set_spotmeter", "args": {"c1": c1, "c2": c2, "r1": r1, "r2": r2}}
         self.cmdQueue.put(cmd)
+        return self.responseQueue.get(block=True, timeout=timeout)
 
-    def get_wifi(self):
+    def get_wifi(self, timeout=None):
         """
         get_wifi()
         Returns wifi data
         """
+        if not timeout:
+            timeout = self.responseTimeout
         cmd = {"cmd": "get_wifi"}
         self.cmdQueue.put(cmd)
-        return self.responseQueue.get(block=True, timeout=self.responseTimeout)
+        return self.responseQueue.get(block=True, timeout=timeout)
 
     def set_wifi(
         self,
@@ -304,10 +371,13 @@ class TCam:
         sta_pw="anotherpassword",
         sta_ip_addr="192.168.0.2",
         sta_netmask="255.255.255.0",
+        timeout=None
     ):
         """
         set_wifi()
         """
+        if not timeout:
+            timeout = self.responseTimeout
         cmd = {
             "cmd": "set_wifi",
             "args": {
@@ -322,6 +392,7 @@ class TCam:
             },
         }
         self.cmdQueue.put(cmd)
+        return self.responseQueue.get(block=True, timeout=timeout)
 
     def send_raw(self, payload: bytes, timeout=None):
         """
