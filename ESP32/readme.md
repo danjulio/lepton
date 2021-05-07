@@ -18,3 +18,6 @@ Both cameras share a common command set for remote access.  A companion Desktop 
 A simple stand-alone server that can connect to multiple cameras, record images that meet certain criteria and display images from the cameras in a web browser.
 
 ![Web Application](pictures/tcam_web.png)
+
+### Python Driver
+A simple driver to allow access from python programs.
