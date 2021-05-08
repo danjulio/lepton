@@ -14,6 +14,9 @@ The application is developed using the [xojo](https://www.xojo.com) development 
 
 Note: Zip files for each application platform can be downloaded directly from my [website](http://danjuliodesigns.com/products/tcam_mini.html) as well.
 
+#### Current Version
+1.2.1 - Fix IP address entry for international users.
+
 #### Platform Caveats
 
 1. You may need to make the Linux application file executable.
