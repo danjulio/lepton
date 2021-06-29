@@ -8,10 +8,12 @@ It has a I2C expansion port that I intend to use to explore adding additional se
 ### Firmware
 The "Firmware" directory contains a V4.0.2 Espressif ESP32 IDF project for tCam-Mini. You should be able to build and load it into a camera using the IDF commands (I still use "make program monitor").  There are also a set of precompiled binaries in the "precompiled" sub-directory.  You can use the Espressif tool and instructions found in the "programming" directory in parallel to this one to load those into a camera without having to build the project.
 
-Note: The precompiled firmware and Windows-based programming application can be downloaded directly from my [website](http://danjuliodesigns.com/products/tcam_mini.html) as well.
+Note: The precompiled firmware and Windows-based programming application can be downloaded directly from my [website](http://danjuliodesigns.com/products/tcam_mini.html) as well if you don't want to clone this entire repository.
 
 ### Hardware
-The "Hardware" directory contains PCB gerbers, stencil gerbers, a BOM and a schematic PDF.  These can be used to build a tCam-Mini on the PCB I designed.  See below for instructions on building one from commonly available development boards.
+The "Hardware" directory contains PCB gerbers, stencil gerbers, a BOM and a schematic PDF.  These can be used to build a tCam-Mini on the PCB I designed.  Of course you can also buy a pre-assembled unit from [Group Gets](https://store.groupgets.com/products/tcam-mini) with or without the Lepton.  See below for instructions on building one from commonly available development boards.
+
+Note: My interests are in radiometric thermography so I have focused only on the Lepton 3.5 and the existing firmware won't work with other Lepton models.  It should be possible for someone to modify my firmware source to work with other models (probably easiest to just pixel-double data from the Lepton 2 and 2.5).  I will be happy to include a link to anyone else's clone of my code that supports these older Leptons.
 
 ### Operation
 tCam-Mini is a command-based device.  It is designed for software running on another device to control it and receive responses and image data from it.  The software communicates with tCam-Mini via a socket interface with commands, responses and images encoded as json packets.  Data is not encrypted so appropriate care should be taken.
@@ -20,14 +22,16 @@ tCam-Mini is a command-based device.  It is designed for software running on ano
 The USB Port provides a USB Serial interface supporting automatic ESP32 reset and boot-mode entry for programming.  It is also used for serial logging output by the ESP32 firmware (115,200 baud).
 
 #### WiFi
-tCam-Mini acts as an Access Point by default.  It selects an SSID based on a unique MAC ID in the ESP32 with the form "tCam-Mini-HHHH" where "HHHH" are the last four hexadecimal digits of the MAC ID.  There is no password by default.  When acting as an Access Point, each tCam-Mini always has the same default IPV4 address (192.168.4.1).
+tCam-Mini can act as either an Access Point (creating its own WiFi network) or a client (connecting to an existing WiFi network).  It acts as an Access Point (AP) by default.  It selects an SSID based on a unique MAC ID in the ESP32 with the form "tCam-Mini-HHHH" where "HHHH" are the last four hexadecimal digits of the MAC ID.  There is no password by default.  When acting as an Access Point, each tCam-Mini always has the same default IPV4 address (192.168.4.1).
 
-It can be reconfigured via a command to act as a WiFi Client (STAtion mode) and connect to an existing WiFi network.  It can also be reconfigured to have either a DHCP served IPV4 address or a fixed IPV4 address.
+It can be reconfigured via a command (for example, from the desktop application) to act as a WiFi Client (STAtion mode) and connect to an existing WiFi network.  When configured as a WiFi Client, it can either get a DHCP served address from the network's router or it can also be reconfigured to have a fixed (static) IPV4 address.  Using a static address makes it easier to connect to tCam-Mini because you don't have to find out what DHCP address the router gave it by logging into the router or using a utility like the Fing Android app or nmap on Linux.
 
 Currently only one device can connect to the camera at a time.
 
+Please see the set of instructions in the DesktopApp folder in this repository for connecting to tCam-Mini in either mode.
+
 #### WiFi Reset Button
-Pressing and holding the WiFi Reset Button for more than five seconds resets the WiFi interface back to the default AP mode.  The status indicator will blink a pattern indicating the reset has occurred.
+Pressing and holding the WiFi Reset Button for more than five seconds resets the WiFi interface back to the default AP mode.  The status indicator will blink a pattern indicating the reset has occurred (see below).
 
 #### Status Indicator
 A dual-color (red/green) LED is used to communicate status.  Combinations of color and blinking patterns communicate various information.
@@ -37,10 +41,10 @@ A dual-color (red/green) LED is used to communicate status.  Combinations of col
 | Off or Dim | Firmware did not start |
 | Solid Red | Firmware is running: initializing and configuring the Lepton and WiFi |
 | Blinking Yellow | AP Mode : No client connected to camera's WiFi |
-|  | STA Mode : Not connected to an AP |
+|  | Client Mode : Not connected to an AP |
 | Solid Yellow | AP Mode : Client connected to camera'sWiFi |
-|  | STA Mode : Connected to an AP |
-| Solid Green | WiFi is connected and external software has connected via a socket |
+|  | Client Mode : Connected to an AP |
+| Solid Green | WiFi is connected and external software has connected via the socket interface|
 | Fast Blink Yellow | WiFi Reset in progress |
 | Series of Red Blinks | A fault has been detected.  The number of blinks indicate the fault type (see table below) |
 
@@ -86,7 +90,7 @@ The camera generates the following responses.
 
 | Response | Description |
 | --- | --- |
-| cam_info | Generic information packet from the camera.  Status for commands that do not generate a response.  May also contain alert or error messages from the camera. |
+| cam_info | Generic information packet from the camera.  Status for commands that do not generate any other response.  May also contain alert or error messages from the camera. |
 | cci_reg | Response to both get\_cci\_reg and set\_cci\_reg commands. |
 | config | Response to get_config command. |
 | image | Response to get_image command or initiated periodically by the camera if streaming has been enabled. |
@@ -131,7 +135,7 @@ The get_status response may include additional information for other camera mode
 #### get_image
 ```{"cmd":"get_image"}```
 
-#### get_image response (or initiated while streaming)
+#### get_image response (or initiated periodically while streaming)
 ```
 {
 	"metadata":	{
@@ -149,8 +153,8 @@ The get_status response may include additional information for other camera mode
 | Image Item | Description |
 | --- | --- |
 | metadata | Camera status information at the time the image was acquired. |
-| radiometric | Base64 encoded Lepton pixel data. 19,200 16-bit words (38,400 bytes).  Each pixel contains a 16-bit absolute (Kelvin) temperature value when the Lepton is operating in Radiometric output mode.  The Lepton's gain mode specifies the resolution (0.01 K in High gain, 0.1 K in Low gain). Each pixel contains an 8-bit value when the Lepton has AGC enabled. |
-| telemetry | Base64 encoded Lepton telemetry data.  240 16-bit words (480 bytes).  See the Lepton Datasheet for a description of the telemetry contents. |
+| radiometric | Base64 encoded Lepton pixel data (19,200 16-bit words / 38,400 bytes).  Each pixel contains a 16-bit absolute (Kelvin) temperature value when the Lepton is operating in Radiometric output mode.  The Lepton's gain mode specifies the resolution (0.01 K in High gain, 0.1 K in Low gain). Each pixel contains an 8-bit value when the Lepton has AGC enabled. |
+| telemetry | Base64 encoded Lepton telemetry data (240 16-bit words / 480 bytes).  See the Lepton Datasheet for a description of the telemetry contents. |
 
 #### get\_lep_cci
 ```
@@ -166,7 +170,7 @@ The get_status response may include additional information for other camera mode
 | get\_lep_cci argument | Description |
 | --- | --- |
 | command | Decimal representation of the 16-bit Lepton COMMAND register value. For example, the value "20172" above is 0x4ECC (RAD Spotmeter Region of Interest). |
-| length | Decimal number of 16-bit words to read. |
+| length | Decimal number of 16-bit words to read (1-512). |
 
 #### cci\_reg response (for get\_lep_cci)
 ```
@@ -453,7 +457,7 @@ For example, ```cam_info``` for ```set_clock``` looks like.
 #### Streaming (and a performance note)
 Streaming is a slightly special case for the command interface.  Responses are only generated after receiving the associated get command.  However the image response is generated repeatedly by the camera after streaming has been enabled at the rate, and for the number of times, specified in the set\_stream\_on command.
 
-While the task that services the Lepton is capable of getting the maximum 8.7 fps frame-rate out of the sensor, the task generating the image response and sending it through the ESP32's network and Wifi stacks can't quite keep up.  It appears that the time required to send the data over the ESP32's Wifi interface varies depending on a several factors including the ESP32 antenna. I get better performance using an ESP32 module with an external antenna than with the built-in PCB antenna.
+While the task that services the Lepton is capable of getting the maximum 8.7 fps frame-rate out of the sensor, the task generating the image response and sending it through the ESP32's network and Wifi stacks may not always keep up.  It appears that the time required to send the data over the ESP32's Wifi interface varies depending on a several factors including the ESP32 antenna. I get better performance using an ESP32 module with an external antenna than with the built-in PCB antenna.
 
 Typical streaming rates vary from about 5-8 fps.  The fps display on the companion application will dip every time the Lepton performs a FFC because it is averaging over several seconds and the camera stops sending images during the FFC (about 1.5 seconds).
  
@@ -487,6 +491,6 @@ The components are wired together as shown below.
 ![ttgo wiring diagram](pictures/ttgo_based_tcam_mini.png)
 
 #### ESP Revision Note
-The modules I buy from Mouser for the PCB design include a Rev 3 ESP32 chip and I compile for that version.  I found that the TTGO module had a Rev 1 ESP32 chip so I recompiled the project for Rev 1.  The binary files for that revision can also be found in the firmware/precompiled subdirectory.  The camera won't boot if you use the wrong chip revision.
+The modules I buy from Mouser and that Group Gets sources for the PCB design include a Rev 3 ESP32 chip and I compile for that version.  I found that the TTGO module had a Rev 1 ESP32 chip so I also recompiled the project for Rev 1.  The binary files for that revision can also be found in the firmware/precompiled subdirectory.  The camera won't boot if you use the wrong chip revision.
 
-Also I buy 8 MB Flash modules but the TTGO module is 4 MB (32 MBit).  Be sure to properly configure the flash size in the programmer to match your module or the firmware will fail to boot.
+The PCB versions have 8 MB Flash modules (64 MBit) but the TTGO module is 4 MB (32 MBit).  Be sure to properly configure the flash size in the programmer to match your module or the firmware will fail to boot.  This is explained in the programming sub-directory readme.

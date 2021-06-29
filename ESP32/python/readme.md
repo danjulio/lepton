@@ -30,6 +30,8 @@ Finally, shut down the driver before finishing your program to close the socket 
 
 	cam.shutdown()
 
+### Timeouts
+All API calls take an optional timeout value which 
 ### Demos
 The ```examples``` directory contains several example python programs using the TCam driver.
 

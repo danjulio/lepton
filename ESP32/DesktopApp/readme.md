@@ -12,7 +12,7 @@ This repository contains the companion desktop application for the tCam cameras.
 
 The application is developed using the [xojo](https://www.xojo.com) development environment.  64-bit binary images are provided for Mac OS X, Windows and x86 Linux systems.  A 32-bit binary image is provided for Raspbian.  Download the zip file for your platform.  The application can be run directly from the unzipped directory by double clicking the application binary icon.
 
-Note: Zip files for each application platform can be downloaded directly from my [website](http://danjuliodesigns.com/products/tcam_mini.html) as well.
+Note: Zip files for each application platform can be downloaded directly from my [website](http://danjuliodesigns.com/products/tcam_mini.html) as well if you don't want to clone this entire repository.
 
 #### Current Version
 1.2.1 - Fix IP address entry for international users.
@@ -23,7 +23,7 @@ Note: Zip files for each application platform can be downloaded directly from my
 2. You may also have to authorize the application on OS X or Windows platforms since I don't yet sign it or package it for distribution in their online stores.
 3. Different Linux desktop systems render the toolbar differently and all toolbar items aren't visible since Linux renders the text next to the icon instead of beneath it.  You can make the window wider to expose some important controls like Stream that has sub-menus or you can use the pull-down menus at the top of the window.
 
-An apology - I develop on my Mac and do quick tests on Windows 7 and 10, and Ubuntu, Kubuntu and Raspbian.  Although xojo provides pretty good cross-platform compatibility for OS X and Windows, sometimes there are issues with Linux.  If you find some other issue, please let me know and I'll try to fix it.
+An advance apology - I develop on my Mac and do quick tests on Windows 7 and 10, and Ubuntu, Kubuntu and Raspbian.  Although xojo provides pretty good cross-platform compatibility for OS X and Windows, sometimes there are issues with Linux.  If you find some other issue, please let me know and I'll try to fix it.
 
 
 ### Main Window
@@ -36,16 +36,32 @@ Main window operation is described below.
 
 The preferences window is used to configure the application.  Preferences are stored on the computer and loaded each time the application starts.
 
-* Camera IP Address - Set the camera's IP address.  Clicking the refresh button sets the computer's current network IP4 address with the lowest octet set to "1".  If the camera is acting as an AP then this address will be the camera address "192.168.4.1".  If the camera and computer are both connected to an external AP then replace the lowest octet with the address associted with the camera.
+* Camera IP Address - Set the camera's IP address.  Clicking the refresh button sets the computer's current network IP4 address with the lowest octet set to "1".  If the camera is acting as an AP then this address will be the camera address "192.168.4.1".  If the camera and computer are both connected to an external AP then replace the lowest octet with the address associated with the camera.
 * Manual Range - Allows setting a specific manual temperature range for the display of radiometric images.
 * Display Units - Allows setting the unit display used throughout the main window.
 * Stream Rate - Allows setting the requested stream rate from the camera when streaming is enabled (fastest possible rate down to one image every five minutes)
-* Update Camera Clock - Causes the application to set the camera's built-in clock to the current computer time on each connection.
+* Update Camera Clock - Causes the application to set the camera's built-in clock to the current computer time on each connection.  The clock is used to timestamp images.
 * Export Resolution - Sets the size of an exported image (160x120 pixels to 640x480 pixels) and specifies if only the image or the image plus additional information is rendered to the exported file.
 * Download Folder - Sets the default folder for downloaded/saved images.
 
+### Connecting to a Camera
+The tCam cameras operate in one of two WiFi modes.  By default they act as an Access Point (AP) and create their own WiFi network with the SSID "tCam-XXXX" or "tCam-Mini-XXXX" where XXXX are four hexadecimal digits.  This makes it easy to connect to a camera right away.  Once connected the camera may be reconfigured using the application to connect to an existing WiFi network, either getting a DHCP served IPV4 address from the network's router or with a statically assigned IPV4 address.  This makes it possible for the computer running the application to talk to both the camera and the internet at large.
+
+The application will display a pop-up message box with the description "TCPSocket Error: 22" when it cannot connect to a camera.  The message is displayed after about 20-30 seconds when the internal socket connection times out.  This usually means the computer and camera are either not on the same WiFi network or the Camera IP Address preference is not correctly set to match the camera.
+
+#### Connecting to a camera as Access Point
+Configure the computer to connect to the camera's SSID.  The camera always has a IPV4 address of "192.168.4.1" when it is acting as an Access Point so this number should be entered into the application preference's Camera IP Address field (this is the application's default value).  Press the Connect button after configuring or verifying the preference IP address field.
+
+Note: A tCam-Mini user attempting to connect using a Windows computer in an environment with a large number of other WiFi networks reported having difficulty.  There may be some issue with the Espressif WiFi network stack along with my code's task scheduling and Windows computers.  I haven't been able to replicate or figure out what might be going on yet.  A connection was made when the computer and tCam-Mini were moved to a less busy environment.
+
+#### Configuring the camera to connect to another WiFi network
+Once connected the application can be used to reconfigure the camera to connect to an existing WiFi network using the Settings button as described below (Camera Settings Window).  The camera may be configured to either get a DHCP served IPV4 address from the router or given a static IPV4 address on the network.
+
+#### Connecting to a camera connected to another WiFi network
+Connecting to a camera on an existing WiFi network requires the camera's IPV4 address to be entered into the application preference's Camera IP Address field before pressing Connect.  It may be necessary to log into the WiFi router or use a utility program (for example Fing on Android or nmap on Linux) to obtain the camera's IPV4 address if it has been assigned automatically using DHCP.
+
 ### Application Operation
-The application is oriented around radiometric image files.  It displays the last image it processed.  This may be a static image loaded from a file or taken by an attached camera.  It may also be a series of images from a video file or streamed from the camera.  Each image is displayed using a selected Palette to provide a false color image.  The 16-bit radiometric data is linearly scaled to 8-bits and the selected palette used to generate 24-bit RGB pixel colors.  When the camera is configured into AGC mode the 8-bit data from the camera is used directly with the selected palette.
+The application is oriented around radiometric image files.  It always displays the last image it processed.  This may be a static image loaded from a file or taken by an attached camera.  It may also be a series of images from a video file or streamed from the camera.  Each image is displayed using a selected Palette to provide a false color image.  The 16-bit radiometric data is linearly scaled to 8-bits and the selected palette used to generate 24-bit RGB pixel colors.  When the camera is configured into AGC mode the 8-bit data from the camera is used directly with the selected palette.
 
 Note that while the application is designed primarily for use with radiometric image files, it is also capable of displaying images taken when the camera's Lepton sensor has been configured into AGC mode.  In this case, since the data from the camera no longer contains radiometric information, several functions (such as radiometric markers or histogram analysis) are not available.
 
@@ -69,13 +85,26 @@ The Camera Settings Window allows configuring the camera operation.  Items with 
 
 ![Settings Window](pictures/settings_window.png)
 
-Configuration items include setting the Lepton into Radiometric or AGC output modes, its gain (High, Low or Automatic) and its applied emissivity (1-100%).
+##### Configuration Tab
+Configuration items affect the Lepton's operation.
 
-WiFi items include whether the camera is acting as an Access Point (AP) or connecting to an AP (STAtion mode), the associated SSID and password and if a static IP should be set (in STA mode only - the camera always has the IP address of 192.168.4.1 in AP mode).
+* AGC Button - Selects between Radiometric operation or the Lepton's AGC mode which uses a built-in algorithm to improve visual image quality at the expense of outputting radiometric data.  When AGC is selected the output data is 8-bits/pixel designed to be displayed through the color palette with improved visual characteristics and is useful to see differences in temperature in an image.
+* Gain Pulldown - Selects the Lepton's Gain mode.  High gain is useful for images with similar temperatures.  Low gain is useful for images with widely varying and high temperatures (for exmaple when looking at fire).  Automatic gain mode allows the Lepton to switch from High to Low gain as necessary based on the image.
+* Emissivity - Sets the Lepton's applied emissivity and is a value of 1-100%.  Should be set based on the characteristics of the materials being imaged.  Some useful materials are listed in the scrollbox.  Selecting one of them automatically updates the emissivity value.
 
-Disabling the Camera's WiFi will disconnect it from the application.  tCam-Mini will need to have a WiFi reset performed to switch the WiFi back on.  The tCam GUI can be used to switch its Wifi back on.
+##### WiFi Tab
+WiFi items include whether the camera is acting as an Access Point (AP) or connecting to an AP (Client mode), the associated SSID and password and if a static IP should be set (in Client mode only - the camera always has the IP address of 192.168.4.1 in AP mode).
 
-If you switch from a WiFI network with a password to one without be sure to select the blank password field to update so the previous password is deleted.
+* Camera is Access Point checkbox - Configure the camera's Wifi Mode as either Access Point (it creates a Wifi Network) or Client (it connects to another Wifi Network).
+* SSID - The Wifi Network SSID.  This is the name of the WiFi Network the camera will create if it is in AP mode or the name of the WiFi Network it will attempt to connect to in Client mode.
+* Password - The Wifi Network WPA password.  This is the password that is necessary to connect to the camera's WiFi Network if it is in AP mode or the password it will use to connect the another WiFi Network in Client mode.  Leave the field blank if there is no password.
+* Enable Camera WiFi - May be used to completely disable the camera's Wifi Network.  Once disabled the camera's WiFi Network must be re-enabled manually.  tCam-Mini will need to have a WiFi reset performed to switch the WiFi back on.  The tCam GUI can be used to switch its Wifi back on.
+* Camera Client Static Address - Selecting this checkbox and filling in the associated IPV4 address field allows configuring the camera with a static IPV4 address.  This only applies to the camera when it is operating in Client mode.  The address must be on the client network and should not be in a range the network's router might assign automatically using DHCP.  De-selecting the checkbox will enable the camera to request a DHCP served IPV4 address from the router.
+* Netmask - The netmask to use when using a static IPV4 address.  Usually this will be "255.255.255.0".
+
+The application will be disconnected after changes to the Wifi configuration are made.  Its Camera IP Address field preference may need to be updated to reconnect.
+
+If you switch from a WiFI network with a password to one without be sure to select a blank password field to update so the previous password is deleted.
 
 #### Range/Palette Display
 The Range/Palette display shows the currently selected palette with a marker showing the spotmeter temperature location within the range of temperatures.  It also displays the minimum and maximum temperatures used to scale the image when the Lepton is operating in Radiometric output mode.  These temperatures are simply the minimum and maximum temperature in the image's radiometric data when Auto Range Selection is enabled.  They are the manual temperature range (set by the user in the Preferences window or automatically when the AR button is pressed) when Manual Range Selection is enabled.
