@@ -19,6 +19,8 @@
   along with tCam.  If not, see <https://www.gnu.org/licenses/>.
 """
 
+import array
+import base64
 import socket
 from queue import Queue
 from threading import Thread, Event
@@ -314,6 +316,7 @@ class TCam:
         self.cmdQueue.put(cmd)
         return self.responseQueue.get(block=True, timeout=timeout)
 
+
     def set_lep_cci(self, command, data, timeout=None):
         try:
             dataArray = array.array('H', data)
@@ -321,7 +324,7 @@ class TCam:
             raise ValueError(f"A value in data list is not within the 0-65535 bounds of a 16 bit UInt. {e}")
         if not timeout:
             timeout = self.responseTimeout
-        encodedData = base64.b64encode(dataArray.tobytes())
+        encodedData = base64.b64encode(dataArray.tobytes()).decode('ascii')
         cmd = {
             "cmd": "set_lep_cci",
             "args": {
@@ -331,7 +334,7 @@ class TCam:
              }
         }
         self.cmdQueue.put(cmd)
-        return self.responseQueue.get(block=True, timeout=self.responseTimeout)
+        return self.responseQueue.get(block=True, timeout=timeout)
 
     def set_spotmeter(self, c1=79, c2=80, r1=59, r2=60, timeout=None):
         """
