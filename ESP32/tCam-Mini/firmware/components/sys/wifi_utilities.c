@@ -23,7 +23,6 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with tCam.  If not, see <https://www.gnu.org/licenses/>.
- *
  */
 #include "wifi_utilities.h"
 #include "ps_utilities.h"
@@ -60,15 +59,21 @@ static wifi_info_t wifi_info = {
 	{0, 0, 0, 0}
 };
 
+static const wifi_country_t def_country_info = {
+	"US",
+	1,
+	11,
+	20,
+	WIFI_COUNTRY_POLICY_AUTO
+};
+
+
 static bool sta_connected = false; // Set when we connect to an AP so we can disconnect if we restart
 static int sta_retry_num = 0;
 
 static wifi_ap_record_t ap_info[WIFI_MAX_SCAN_LIST_SIZE];
 static bool scan_in_progress = false;
 static bool got_scan_done_event = false; // Set when an AP Scan is complete
-
-// FreeRTOS event group to signal when we are connected
-static EventGroupHandle_t wifi_event_group;
 
 
 
@@ -95,7 +100,6 @@ bool wifi_init()
 	esp_err_t ret;
 	
 	// Setup the event handler
-	wifi_event_group = xEventGroupCreate();
 	ret = esp_event_loop_init(sys_event_handler, NULL);
 	if (ret != ESP_OK) {
 		ESP_LOGE(TAG, "Could not initialize event loop handler (%d)", ret);
@@ -126,6 +130,7 @@ bool wifi_init()
 	// Initialize the WiFi interface
 	if (init_esp_wifi()) {
 		wifi_info.flags |= WIFI_INFO_FLAG_INITIALIZED;
+		ESP_LOGI(TAG, "WiFi initialized");
 		
 		// Configure the WiFi interface if enabled
 		if ((wifi_info.flags & WIFI_INFO_FLAG_STARTUP_ENABLE) != 0) {
@@ -146,6 +151,7 @@ bool wifi_init()
 			}
 		}
 	} else {
+		ESP_LOGE(TAG, "WiFi Initialization failed");
 		return false;
 	}
 	
@@ -247,6 +253,7 @@ bool wifi_setup_scan()
 
 	if ((wifi_info.flags & WIFI_INFO_FLAG_INITIALIZED) == 0) {
 		// Attempt to initialize the wifi interface again
+		ESP_LOGI(TAG, "Re-init WiFi");
 		if (!init_esp_wifi()) {
 			return false;
 		}
@@ -382,6 +389,13 @@ static bool init_esp_wifi()
 	ret = esp_wifi_set_storage(WIFI_STORAGE_RAM);
 	if (ret != ESP_OK) {
 		ESP_LOGE(TAG, "Could not set RAM storage for configuration (%d)", ret);
+		return false;
+	}
+		
+	// Setup WiFi country restrictions to US/AUTO
+	ret = esp_wifi_set_country(&def_country_info);
+	if (ret != ESP_OK) {
+		ESP_LOGE(TAG, "Could not set default country configuration - %x", ret);
 		return false;
 	}
 	

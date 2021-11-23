@@ -3,7 +3,7 @@
 # project subdirectory.
 #
 
-PROJECT_NAME := tCam
+PROJECT_NAME := tCamMini
 
 EXTRA_COMPONENT_DIRS := components/lvgl_esp32_drivers/lvgl_tft components/lvgl_esp32_drivers/lvgl_touch
 

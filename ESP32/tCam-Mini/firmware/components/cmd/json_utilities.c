@@ -2,7 +2,7 @@
  * JSON related utilities
  *
  * Contains functions to generate json text objects and parse text objects into the
- * json objects used by firecam.  Uses the cjson library.  Image data is formatted
+ * json objects used by tCam.  Uses the cjson library.  Image data is formatted
  * using Base64 encoding.
  *
  * This module uses two pre-allocated buffers for the json text objects.  One for image
@@ -32,10 +32,13 @@
  */
 #include "json_utilities.h"
 #include "ps_utilities.h"
-#include "system_config.h"
 #include "lepton_utilities.h"
 #include "time_utilities.h"
-#include "cmd_task.h"
+#include "cmd_utilities.h"
+#include "ps_utilities.h"
+#include "upd_utilities.h"
+#include "ctrl_task.h"
+#include "system_config.h"
 #include "vospi.h"
 #include "mbedtls/base64.h"
 #include "esp_system.h"
@@ -43,6 +46,12 @@
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include <string.h>
+
+
+//
+// JSON Utilities internal constants
+//
+#define CCI_BUF_LEN 1024
 
 
 
@@ -74,7 +83,9 @@ const cmd_name_t command_list[CMD_NUM] = {
 	{CMD_GET_FS_FILE_S, CMD_GET_FS_FILE},
 	{CMD_DEL_FS_OBJ_S, CMD_DEL_FS_OBJ},
 	{CMD_GET_LEP_CCI_S, CMD_GET_LEP_CCI},
-	{CMD_SET_LEP_CCI_S, CMD_SET_LEP_CCI}
+	{CMD_SET_LEP_CCI_S, CMD_SET_LEP_CCI},
+	{CMD_FW_UPD_REQ_S, CMD_FW_UPD_REQ},
+	{CMD_FW_UPD_SEG_S, CMD_FW_UPD_SEG}
 };
 
 
@@ -132,7 +143,7 @@ bool json_init()
 		return false;
 	}
 	
-	cci_buf = heap_caps_malloc(1024, MALLOC_CAP_SPIRAM);
+	cci_buf = heap_caps_malloc(CCI_BUF_LEN, MALLOC_CAP_SPIRAM);
 	if (cci_buf == NULL) {
 		ESP_LOGE(TAG, "Could not allocate cci data buffer");
 		return false;
@@ -148,7 +159,13 @@ bool json_init()
  */
 cJSON* json_get_cmd_object(char* json_string)
 {
-	return cJSON_Parse(json_string);
+	cJSON* ret;
+	
+	ret = cJSON_Parse(json_string);
+	if (ret == NULL) {
+		ESP_LOGE(TAG, "Parse error at %d", cJSON_GetErrorPtr() - json_string);
+	}
+	return ret;
 }
 
 
@@ -184,7 +201,7 @@ uint32_t json_get_image_file_string(char* json_image_text, lep_buffer_t* lep_buf
 		}
 	}
 	
-	// Pretty-print the object to our buffer
+	// Tightly print the object to our buffer
 	if (success) {
 		if (cJSON_PrintPreallocated(root, json_image_text, JSON_MAX_IMAGE_TEXT_LEN, false) == 0) {
 			len = 0;
@@ -248,6 +265,7 @@ char* json_get_status(uint32_t* len)
 	char buf[80];
 	cJSON* root;
 	cJSON* status;
+	int model_field;
 	wifi_info_t* wifi_infoP;
 	const esp_app_desc_t* app_desc;
 	tmElements_t te;
@@ -265,7 +283,9 @@ char* json_get_status(uint32_t* len)
 	wifi_infoP = wifi_get_info();
 	cJSON_AddStringToObject(status, "Camera", wifi_infoP->ap_ssid);
 	
-	cJSON_AddNumberToObject(status, "Model", CAMERA_MODEL_NUM);
+	model_field = ctrl_get_ser_mode() ? CAMERA_MODEL_NUM_SIF : CAMERA_MODEL_NUM_WIFI;
+	model_field |= lepton_is_radiometric() ? CAMERA_CAP_MASK_RAD : CAMERA_CAP_MASK_NONRAD;
+	cJSON_AddNumberToObject(status, "Model", model_field);
 	
 	cJSON_AddStringToObject(status, "Version", app_desc->version);
 	
@@ -373,6 +393,34 @@ char* json_get_cci_response(uint16_t cmd, int cci_len, uint16_t status, uint16_t
 			json_free_cci_reg_base64_data();
 		}
 	}
+	cJSON_Delete(root);
+	
+	return json_response_text;
+}
+
+
+/**
+ * Return a formatted json string containing the start location and length for a chunk
+ * of firmware to return as part of a OTA firmware update.  Include the delimiters
+ * since this string will be sent via the socket interface.
+ */
+char* json_get_get_fw(uint32_t fw_start, uint32_t fw_len, uint32_t* len)
+{
+	cJSON* root;
+	cJSON* get_fw;
+	
+	// Create and add to the cci_reg object
+	root = cJSON_CreateObject();
+	if (root == NULL) return NULL;
+	
+	cJSON_AddItemToObject(root, "get_fw", get_fw=cJSON_CreateObject());
+	
+	cJSON_AddNumberToObject(get_fw, "start", fw_start);
+	cJSON_AddNumberToObject(get_fw, "length", fw_len);
+	
+	// Tightly print the object into our buffer with delimitors
+	*len = json_generate_response_string(root, json_response_text);
+	
 	cJSON_Delete(root);
 	
 	return json_response_text;
@@ -796,7 +844,7 @@ bool json_parse_set_lep_cci(cJSON* cmd_args, uint16_t* cmd, int* len, uint16_t**
 				data = cJSON_GetObjectItem(cmd_args, "data")->valuestring;
 				
 				// Decode
-				i = mbedtls_base64_decode((unsigned char*) cci_buf, *len*2, &dec_len, (const unsigned char*) data, strlen(data));
+				i = mbedtls_base64_decode((unsigned char*) cci_buf, CCI_BUF_LEN, &dec_len, (const unsigned char*) data, strlen(data));
 				if (i != 0) {
 					ESP_LOGE(TAG, "Base 64 CCI Register data decode failed - %d (%d bytes decoded)", i, dec_len);
 					return false;
@@ -807,6 +855,76 @@ bool json_parse_set_lep_cci(cJSON* cmd_args, uint16_t* cmd, int* len, uint16_t**
 		*buf = cci_buf;
 		
 		return(item_count == 2);
+	}
+	
+	return false;
+}
+
+
+bool json_parse_fw_upd_request(cJSON* cmd_args, uint32_t* len, char* ver)
+{
+	char* v;
+	int i;
+	int item_count = 0;
+	
+	if (cmd_args != NULL) {
+		if (cJSON_HasObjectItem(cmd_args, "length")) {
+			i = cJSON_GetObjectItem(cmd_args, "length")->valueint;
+			*len = (uint32_t) i;
+			item_count++;
+		}
+		
+		if (cJSON_HasObjectItem(cmd_args, "version")) {
+			v = cJSON_GetObjectItem(cmd_args, "version")->valuestring;
+			strncpy(ver, v, UPD_MAX_VER_LEN);
+			item_count++;
+		}
+		
+		return(item_count == 2);
+	}
+	
+	return false;
+}
+
+
+bool json_parse_fw_segment(cJSON* cmd_args, uint32_t* start, uint32_t* len, uint8_t* buf)
+{
+	char* data;
+	int i;
+	int item_count = 0;
+	size_t dec_len;
+	size_t enc_len;
+	
+	if (cmd_args != NULL) {
+		if (cJSON_HasObjectItem(cmd_args, "start")) {
+			i = cJSON_GetObjectItem(cmd_args, "start")->valueint;
+			*start = (uint32_t) i;
+			item_count++;
+		}
+		
+		if (cJSON_HasObjectItem(cmd_args, "length")) {
+			i = cJSON_GetObjectItem(cmd_args, "length")->valueint;
+			*len = (uint32_t) i;
+			item_count++;
+		}
+		
+		if (item_count == 2) {
+			if (cJSON_HasObjectItem(cmd_args, "data")) {
+				data = cJSON_GetObjectItem(cmd_args, "data")->valuestring;
+				
+				// Decode
+				enc_len = strlen(data);
+				i = mbedtls_base64_decode(buf, FM_UPD_CHUNK_MAX_LEN, &dec_len, (const unsigned char*) data, enc_len);
+				if (i != 0) {
+					ESP_LOGE(TAG, "Base 64 FW segment data decode failed - %d (%d bytes decoded)", i, dec_len);
+					return false;
+				}
+				
+				item_count++;
+			}
+		}
+		
+		return(item_count == 3);
 	}
 	
 	return false;
@@ -993,23 +1111,42 @@ static void json_free_cci_reg_base64_data()
  */
 static bool json_add_metadata_object(cJSON* parent)
 {
+	bool ser_mode;
 	char buf[80];
 	cJSON* meta;
+	int model_field;
 	wifi_info_t* wifi_info;
+	uint8_t sys_mac_addr[6];
 	const esp_app_desc_t* app_desc;
 	tmElements_t te;
 	
 	// Get system information
+	ser_mode = ctrl_get_ser_mode();
 	app_desc = esp_ota_get_app_description();
 	time_get(&te);
 	
 	// Create and add to the metadata object
 	cJSON_AddItemToObject(parent, "metadata", meta=cJSON_CreateObject());
 	
-	wifi_info = wifi_get_info();
-	cJSON_AddStringToObject(meta, "Camera", wifi_info->ap_ssid);
+	if (ser_mode) {
+		// Get the system's default MAC address and add 1 to match the "Soft AP" mode
+		// (see "Miscellaneous System APIs" in the ESP-IDF documentation)
+		esp_efuse_mac_get_default(sys_mac_addr);
+		sys_mac_addr[5] = sys_mac_addr[5] + 1;
+		sprintf(buf, "%s%c%c%c%c", PS_DEFAULT_AP_SSID,
+		    ps_nibble_to_ascii(sys_mac_addr[4] >> 4),
+		    ps_nibble_to_ascii(sys_mac_addr[4]),
+		    ps_nibble_to_ascii(sys_mac_addr[5] >> 4),
+	 	    ps_nibble_to_ascii(sys_mac_addr[5]));
+	 	cJSON_AddStringToObject(meta, "Camera", buf);
+	} else {
+		wifi_info = wifi_get_info();
+		cJSON_AddStringToObject(meta, "Camera", wifi_info->ap_ssid);
+	}
 	
-	cJSON_AddNumberToObject(meta, "Model", CAMERA_MODEL_NUM);
+	model_field = ser_mode ? CAMERA_MODEL_NUM_SIF : CAMERA_MODEL_NUM_WIFI;
+	model_field |= lepton_is_radiometric() ? CAMERA_CAP_MASK_RAD : CAMERA_CAP_MASK_NONRAD;
+	cJSON_AddNumberToObject(meta, "Model", model_field);
 	
 	cJSON_AddStringToObject(meta, "Version", app_desc->version);
 	

@@ -33,6 +33,7 @@
 #include "sys_utilities.h"
 #include "vospi.h"
 #include "system_config.h"
+#include <string.h>
 
 
 
@@ -40,6 +41,8 @@
 // Lepton Utilities variables
 //
 static const char* TAG = "lepton_utilities";
+
+static bool lep_is_radiometric = false;
 
 
 
@@ -49,6 +52,7 @@ static const char* TAG = "lepton_utilities";
 
 bool lepton_init()
 {
+	char pn[33];
 	uint32_t val, rsp;
 	json_config_t* lep_stP = system_get_lep_st();
   
@@ -60,39 +64,54 @@ bool lepton_init()
   		return false;
 	}
 	
-	// Configure Radiometry for TLinear enabled, auto-resolution
-	cci_set_radiometry_enable_state(CCI_RADIOMETRY_ENABLED);
-	rsp = cci_get_radiometry_enable_state();
-	ESP_LOGI(TAG, "Lepton Radiometry = %d", rsp);
-	if (rsp != CCI_RADIOMETRY_ENABLED) {
-		// Make one more effort
-		vTaskDelay(pdMS_TO_TICKS(10));
-		ESP_LOGI(TAG, "Retry Set Lepton Radiometry");
+	// Get the Lepton type (part number) to determine if it's a Lepton 3.0 or 3.5
+	lep_is_radiometric = false;
+	cci_get_part_number(pn);
+	ESP_LOGI(TAG, "Found Lepton, part number: %s", pn);
+	if (strncmp(pn, "500-0771-01", 32) == 0) {
+		ESP_LOGI(TAG, "  Radiometric Lepton 3.5");
+		lep_is_radiometric = true;
+	} else if (strncmp(pn, "500-0726-01", 32) == 0) {
+		ESP_LOGI(TAG, "  Non-radiometric Lepton 3.0");
+	} else {
+		ESP_LOGI(TAG, "  Unsupported Lepton");
+	}
+	
+	if (lep_is_radiometric) {
+		// Configure Radiometry for TLinear enabled, auto-resolution
 		cci_set_radiometry_enable_state(CCI_RADIOMETRY_ENABLED);
 		rsp = cci_get_radiometry_enable_state();
 		ESP_LOGI(TAG, "Lepton Radiometry = %d", rsp);
 		if (rsp != CCI_RADIOMETRY_ENABLED) {
-			ESP_LOGE(TAG, "Lepton communication failed (%d)", rsp);
-			return false;
+			// Make one more effort
+			vTaskDelay(pdMS_TO_TICKS(10));
+			ESP_LOGI(TAG, "Retry Set Lepton Radiometry");
+			cci_set_radiometry_enable_state(CCI_RADIOMETRY_ENABLED);
+			rsp = cci_get_radiometry_enable_state();
+			ESP_LOGI(TAG, "Lepton Radiometry = %d", rsp);
+			if (rsp != CCI_RADIOMETRY_ENABLED) {
+				ESP_LOGE(TAG, "Lepton communication failed (%d)", rsp);
+				return false;
+			}
 		}
-	}
-
-	// TLinear depends on AGC
-	val = (lep_stP->agc_set_enabled) ? CCI_RADIOMETRY_TLINEAR_DISABLED : CCI_RADIOMETRY_TLINEAR_ENABLED;
-	cci_set_radiometry_tlinear_enable_state(val);
-	rsp = cci_get_radiometry_tlinear_enable_state();
-	ESP_LOGI(TAG, "Lepton Radiometry TLinear = %d", rsp);
-	if (rsp != val) {
-		ESP_LOGE(TAG, "Lepton communication failed (%d)", rsp);
-  		return false;
-	}
 	
-	cci_set_radiometry_tlinear_auto_res(CCI_RADIOMETRY_AUTO_RES_ENABLED);
-	rsp = cci_get_radiometry_tlinear_auto_res();
-	ESP_LOGI(TAG, "Lepton Radiometry Auto Resolution = %d", rsp);
-	if (rsp != CCI_RADIOMETRY_AUTO_RES_ENABLED) {
-		ESP_LOGE(TAG, "Lepton communication failed (%d)", rsp);
-  		return false;
+		// TLinear depends on AGC
+		val = (lep_stP->agc_set_enabled) ? CCI_RADIOMETRY_TLINEAR_DISABLED : CCI_RADIOMETRY_TLINEAR_ENABLED;
+		cci_set_radiometry_tlinear_enable_state(val);
+		rsp = cci_get_radiometry_tlinear_enable_state();
+		ESP_LOGI(TAG, "Lepton Radiometry TLinear = %d", rsp);
+		if (rsp != val) {
+			ESP_LOGE(TAG, "Lepton communication failed (%d)", rsp);
+	  		return false;
+		}
+		
+		cci_set_radiometry_tlinear_auto_res(CCI_RADIOMETRY_AUTO_RES_ENABLED);
+		rsp = cci_get_radiometry_tlinear_auto_res();
+		ESP_LOGI(TAG, "Lepton Radiometry Auto Resolution = %d", rsp);
+		if (rsp != CCI_RADIOMETRY_AUTO_RES_ENABLED) {
+			ESP_LOGE(TAG, "Lepton communication failed (%d)", rsp);
+	  		return false;
+		}
 	}
 	
 	// Enable AGC calcs for a smooth transition between modes
@@ -144,8 +163,10 @@ bool lepton_init()
 	}
 	
 	// Emissivity
-	lepton_emissivity(lep_stP->emissivity);
-	ESP_LOGI(TAG, "Lepton Emissivity = %d%%", lep_stP->emissivity);
+	if (lep_is_radiometric) {
+		lepton_emissivity(lep_stP->emissivity);
+		ESP_LOGI(TAG, "Lepton Emissivity = %d%%", lep_stP->emissivity);
+	}
   	
 	// Finally enable VSYNC on Lepton GPIO3
 	cci_set_gpio_mode(LEP_OEM_GPIO_MODE_VSYNC);
@@ -160,13 +181,23 @@ bool lepton_init()
 }
 
 
+bool lepton_is_radiometric()
+{
+	return lep_is_radiometric;
+}
+
+
 void lepton_agc(bool en)
 {
 	if (en) {
-		cci_set_radiometry_tlinear_enable_state(CCI_RADIOMETRY_TLINEAR_DISABLED);
+		if (lep_is_radiometric) {
+			cci_set_radiometry_tlinear_enable_state(CCI_RADIOMETRY_TLINEAR_DISABLED);
+		}
 		cci_set_agc_enable_state(CCI_AGC_ENABLED);
 	} else {
-		cci_set_radiometry_tlinear_enable_state(CCI_RADIOMETRY_TLINEAR_ENABLED);
+		if (lep_is_radiometric) {
+			cci_set_radiometry_tlinear_enable_state(CCI_RADIOMETRY_TLINEAR_ENABLED);
+		}
 		cci_set_agc_enable_state(CCI_AGC_DISABLED);
 	}
 }
@@ -182,23 +213,27 @@ void lepton_gain_mode(uint8_t mode)
 {
 	cc_gain_mode_t gain_mode;
 	
-	switch (mode) {
-		case SYS_GAIN_HIGH:
-			gain_mode = LEP_SYS_GAIN_MODE_HIGH;
-			break;
-		case SYS_GAIN_LOW:
-			gain_mode = LEP_SYS_GAIN_MODE_LOW;
-			break;
-		default:
-			gain_mode = LEP_SYS_GAIN_MODE_AUTO;
+	if (lep_is_radiometric) {
+		switch (mode) {
+			case SYS_GAIN_HIGH:
+				gain_mode = LEP_SYS_GAIN_MODE_HIGH;
+				break;
+			case SYS_GAIN_LOW:
+				gain_mode = LEP_SYS_GAIN_MODE_LOW;
+				break;
+			default:
+				gain_mode = LEP_SYS_GAIN_MODE_AUTO;
+		}
+		cci_set_gain_mode(gain_mode);
 	}
-	cci_set_gain_mode(gain_mode);
 }
 
 
 void lepton_spotmeter(uint16_t r1, uint16_t c1, uint16_t r2, uint16_t c2)
 {
-	cci_set_radiometry_spotmeter(r1, c1, r2, c2);
+	if (lep_is_radiometric) {
+		cci_set_radiometry_spotmeter(r1, c1, r2, c2);
+	}
 }
 
 
@@ -206,21 +241,23 @@ void lepton_emissivity(uint16_t e)
 {
 	cci_rad_flux_linear_params_t set_flux_values;
 	
-	// Scale percentage e into Lepton scene emissivity values (1-100% -> 82-8192)
-	if (e < 1) e = 1;
-	if (e > 100) e = 100;
-	set_flux_values.sceneEmissivity = e * 8192 / 100;
-	
-	// Set default (no lens) values for the remaining parameters
-	set_flux_values.TBkgK      = 29515;
-	set_flux_values.tauWindow  = 8192;
-	set_flux_values.TWindowK   = 29515;
-	set_flux_values.tauAtm     = 8192;
-	set_flux_values.TAtmK      = 29515;
-	set_flux_values.reflWindow = 0;
-	set_flux_values.TReflK     = 29515;
-	
-	cci_set_radiometry_flux_linear_params(&set_flux_values);
+	if (lep_is_radiometric) {
+		// Scale percentage e into Lepton scene emissivity values (1-100% -> 82-8192)
+		if (e < 1) e = 1;
+		if (e > 100) e = 100;
+		set_flux_values.sceneEmissivity = e * 8192 / 100;
+		
+		// Set default (no lens) values for the remaining parameters
+		set_flux_values.TBkgK      = 29515;
+		set_flux_values.tauWindow  = 8192;
+		set_flux_values.TWindowK   = 29515;
+		set_flux_values.tauAtm     = 8192;
+		set_flux_values.TAtmK      = 29515;
+		set_flux_values.reflWindow = 0;
+		set_flux_values.TReflK     = 29515;
+		
+		cci_set_radiometry_flux_linear_params(&set_flux_values);
+	}
 }
 
 

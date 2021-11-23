@@ -21,7 +21,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with firecam.  If not, see <https://www.gnu.org/licenses/>.
+ * along with tCam.  If not, see <https://www.gnu.org/licenses/>.
  *
  */
 #ifndef PS_UTILITIES_H
@@ -51,11 +51,12 @@
 //
 // PS Utilities API
 //
-bool ps_init();
+bool ps_init(bool ser_mode);
 void ps_get_lep_state(json_config_t* state);
 void ps_set_lep_state(const json_config_t* state);
 void ps_get_wifi_info(wifi_info_t* info);
 void ps_set_wifi_info(const wifi_info_t* info);
 bool ps_reinit_wifi();
+char ps_nibble_to_ascii(uint8_t n);
 
 #endif /* PS_UTILITIES_H */

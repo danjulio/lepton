@@ -94,6 +94,8 @@
 #define CCI_CMD_OEM_GET_GPIO_MODE 0x4854
 #define CCI_CMD_OEM_SET_GPIO_MODE 0x4855
 
+#define CCI_CMD_OEM_GET_PART_NUM 0x481C
+
 
 //
 // Macros
@@ -216,5 +218,6 @@ uint32_t cci_get_agc_calc_enable_state();
 void cc_run_oem_reboot();
 uint32_t cci_get_gpio_mode();
 void cci_set_gpio_mode(cci_gpio_mode_t mode);
+void cci_get_part_number(char* pn);
 
 #endif /* CCI_H */

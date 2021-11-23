@@ -1,11 +1,13 @@
 /*
  * Control Interface Task
  *
+ * Determine communication mode (WiFi or Serial)
+ *
  * Manage user controls:
  *   WiFi Reset Button
  *   Red/Green Dual Status LED
  *
- * Copyright 2020 Dan Julio
+ * Copyright 2020-2021 Dan Julio
  *
  * This file is part of tCam.
  *
@@ -20,12 +22,13 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with firecam.  If not, see <https://www.gnu.org/licenses/>.
+ * along with tCam.  If not, see <https://www.gnu.org/licenses/>.
  *
  */
 #include <stdbool.h>
-#include "cmd_task.h"
+#include "wifi_cmd_task.h"
 #include "ctrl_task.h"
+#include "rsp_task.h"
 #include "esp_system.h"
 #include "esp_log.h"
 #include "driver/gpio.h"
@@ -49,14 +52,18 @@
 #define CTRL_LED_GRN 3
 
 // LED State Machine states
-#define CTRL_LED_ST_SOLID     0
-#define CTRL_LED_ST_BLINK_ON  1
-#define CTRL_LED_ST_BLINK_OFF 2
-#define CTRL_LED_ST_RST_ON    3
-#define CTRL_LED_ST_RST_OFF   4
-#define CTRL_LED_ST_FLT_ON    5
-#define CTRL_LED_ST_FLT_OFF   6
-#define CTRL_LED_ST_FLT_IDLE  7
+#define CTRL_LED_ST_SOLID      0
+#define CTRL_LED_ST_BLINK_ON   1
+#define CTRL_LED_ST_BLINK_OFF  2
+#define CTRL_LED_ST_RST_ON     3
+#define CTRL_LED_ST_RST_OFF    4
+#define CTRL_LED_ST_FLT_ON     5
+#define CTRL_LED_ST_FLT_OFF    6
+#define CTRL_LED_ST_FLT_IDLE   7
+#define CTRL_LED_ST_FW_REQ_R   8
+#define CTRL_LED_ST_FW_REQ_G   9
+#define CTRL_LED_ST_FW_UPD_ON  10
+#define CTRL_LED_ST_FW_UPD_OFF 11
 
 // Control State Machine states
 #define CTRL_ST_STARTUP            0
@@ -66,6 +73,8 @@
 #define CTRL_ST_RESET_ALERT        4
 #define CTRL_ST_RESET_ACTION       5
 #define CTRL_ST_FAULT              6
+#define CTRL_ST_FW_UPD_REQUEST     7
+#define CTRL_ST_FW_UPD_PROCESS     8
 
 
 //
@@ -74,8 +83,9 @@
 static const char* TAG = "ctrl_task";
 
 // State
+static bool ctrl_ser_mode;
 static int ctrl_state;
-static int ctrl_pre_fault_state;
+static int ctrl_pre_activity_state;
 static int ctrl_led_state;
 static int ctrl_action_timer;
 static int ctrl_led_timer;
@@ -88,7 +98,7 @@ static int ctrl_fault_type = CTRL_FAULT_NONE;
 // Forward Declarations for internal functions
 //
 static void ctrl_task_init();
-static bool ctrl_debounce_button();
+static void ctrl_debounce_button(bool* short_p, bool* long_p);
 static void ctrl_set_led(int color);
 static void ctrl_eval_sm();
 static void ctrl_set_state(int new_st);
@@ -116,6 +126,12 @@ void ctrl_task()
 }
 
 
+bool ctrl_get_ser_mode()
+{
+	return ctrl_ser_mode;
+}
+
+
 // Not protected by semaphore since it won't be accessed until after subsequent notification
 void ctrl_set_fault_type(int f)
 {
@@ -125,8 +141,10 @@ void ctrl_set_fault_type(int f)
 		// Asynchronously notify this task to return to the previous state
 		xTaskNotify(task_handle_ctrl, CTRL_NOTIFY_FAULT_CLEAR, eSetBits);
 	} else {
-		// Save the existing state to return to the fault is cleared
-		ctrl_pre_fault_state = ctrl_state;
+		// Save the existing state to return to when the fault is cleared
+		if (ctrl_state != CTRL_ST_FW_UPD_PROCESS) {
+			ctrl_pre_activity_state = ctrl_state;
+		}
 		
 		// Asynchronously notify this task
 		xTaskNotify(task_handle_ctrl, CTRL_NOTIFY_FAULT, eSetBits);
@@ -140,6 +158,12 @@ void ctrl_set_fault_type(int f)
 //
 static void ctrl_task_init()
 {
+	// First, determine the operating mode
+	gpio_reset_pin(MODE_SENSE_IO);
+	gpio_set_direction(MODE_SENSE_IO, GPIO_MODE_INPUT);
+	gpio_set_pull_mode(MODE_SENSE_IO, GPIO_PULLUP_ONLY);
+	ctrl_ser_mode = gpio_get_level(MODE_SENSE_IO) == 0;
+	
 	// Setup the GPIO
 	gpio_reset_pin(BTN_IO);
 	gpio_set_direction(BTN_IO, GPIO_MODE_INPUT);
@@ -158,7 +182,7 @@ static void ctrl_task_init()
 }
 
 
-static bool ctrl_debounce_button()
+static void ctrl_debounce_button(bool* short_p, bool* long_p)
 {
 	// Button press state
 	static bool prev_btn = false;
@@ -167,7 +191,11 @@ static bool ctrl_debounce_button()
 	
 	// Dynamic variables
 	bool cur_btn;
-	bool btn_pressed = false;
+	bool btn_released = false;
+	
+	// Outputs will be set as necessary
+	*short_p = false;
+	*long_p = false;
 	
 	// Get current button value
 	cur_btn = gpio_get_level(BTN_IO) == 0;
@@ -175,9 +203,13 @@ static bool ctrl_debounce_button()
 	// Evaluate button logic
 	if (cur_btn && prev_btn && !btn_down) {
 		// Button just pressed
+		btn_down = true;
 		btn_timer = CTRL_BTN_PRESS_MSEC / CTRL_EVAL_MSEC;
 	}
-	btn_down = cur_btn && prev_btn;
+	if (!cur_btn && !prev_btn && btn_down) {
+		btn_down = false;
+		btn_released = true;
+	}
 	prev_btn = cur_btn;
 	
 	// Evaluate timer for long press detection
@@ -185,12 +217,15 @@ static bool ctrl_debounce_button()
 		if (btn_timer != 0) {
 			if (--btn_timer == 0) {
 				// Long press detected
-				btn_pressed = true;
+				*long_p = true;
 			}
 		}
 	}
 	
-	return btn_pressed;
+	if (btn_released && (btn_timer != 0)) {
+		// Short press detected
+		*short_p = true;
+	}
 }
 
 
@@ -222,11 +257,12 @@ static void ctrl_set_led(int color)
 
 static void ctrl_eval_sm()
 {
-	bool btn_pressed;
+	bool btn_short_press;
+	bool btn_long_press;
 	wifi_info_t* wifi_info;
 	
 	// Look for button presses
-	btn_pressed = ctrl_debounce_button();
+	ctrl_debounce_button(&btn_short_press, &btn_long_press);
 	
 	switch (ctrl_state) {
 		case CTRL_ST_STARTUP:
@@ -235,7 +271,7 @@ static void ctrl_eval_sm()
 
 		case CTRL_ST_WIFI_NOT_CONNECTED:
 			wifi_info = wifi_get_info();
-			if (btn_pressed) {
+			if (btn_long_press) {
 				ctrl_set_state(CTRL_ST_RESET_ALERT);
 			} else if ((wifi_info->flags & WIFI_INFO_FLAG_CONNECTED) == WIFI_INFO_FLAG_CONNECTED) {
 				ctrl_set_state(CTRL_ST_WIFI_CONNECTED);
@@ -244,22 +280,24 @@ static void ctrl_eval_sm()
 		
 		case CTRL_ST_WIFI_CONNECTED:
 			wifi_info = wifi_get_info();
-			if (btn_pressed) {
+			if (btn_long_press) {
 				ctrl_set_state(CTRL_ST_RESET_ALERT);
 			} else if ((wifi_info->flags & WIFI_INFO_FLAG_CONNECTED) != WIFI_INFO_FLAG_CONNECTED) {
 				ctrl_set_state(CTRL_ST_WIFI_NOT_CONNECTED);
-			} else if (cmd_connected()) {
+			} else if (wifi_cmd_connected()) {
 				ctrl_set_state(CTRL_ST_CLIENT_CONNECTED);
 			}
 			break;
 		
 		case CTRL_ST_CLIENT_CONNECTED:
-			if (btn_pressed) {
-				ctrl_set_state(CTRL_ST_RESET_ALERT);
-			} else if (!cmd_connected()) {
-				// Goto wifi not connected in case this was why we lost our client.
-				// If it is connected then we'll quickly go to wifi connected.
-				ctrl_set_state(CTRL_ST_WIFI_NOT_CONNECTED);
+			if (!ctrl_ser_mode) {
+				if (btn_long_press) {
+					ctrl_set_state(CTRL_ST_RESET_ALERT);
+				} else if (!wifi_cmd_connected()) {
+					// Goto wifi not connected in case this was why we lost our client.
+					// If it is connected then we'll quickly go to wifi connected.
+					ctrl_set_state(CTRL_ST_WIFI_NOT_CONNECTED);
+				}
 			}
 			break;
 		
@@ -279,6 +317,20 @@ static void ctrl_eval_sm()
 		
 		case CTRL_ST_FAULT:
 			// Remain here until taken out if the fault is cleared
+			break;
+		
+		case CTRL_ST_FW_UPD_REQUEST:
+			if (btn_short_press) {
+				// Notify rsp_task user has authorized fw update
+				xTaskNotify(task_handle_rsp, RSP_NOTIFY_FW_UPD_EN_MASK, eSetBits);
+			}
+			break;
+		
+		case CTRL_ST_FW_UPD_PROCESS:
+			if (btn_short_press) {
+				// Notify rsp_task user has terminated fw update
+				xTaskNotify(task_handle_rsp, RSP_NOTIFY_FW_UPD_END_MASK, eSetBits);
+			}
 			break;
 		
 		default:
@@ -340,6 +392,30 @@ static void ctrl_eval_led_sm()
 				ctrl_set_led_state(CTRL_LED_ST_FLT_ON);
 			}
 			break;
+			
+		case CTRL_LED_ST_FW_REQ_R:
+			if (--ctrl_led_timer == 0) {
+				ctrl_set_led_state(CTRL_LED_ST_FW_REQ_G);
+			}
+			break;
+		
+		case CTRL_LED_ST_FW_REQ_G:
+			if (--ctrl_led_timer == 0) {
+				ctrl_set_led_state(CTRL_LED_ST_FW_REQ_R);
+			}
+			break;
+		
+		case CTRL_LED_ST_FW_UPD_ON:
+			if (--ctrl_led_timer == 0) {
+				ctrl_set_led_state(CTRL_LED_ST_FW_UPD_OFF);
+			}
+			break;
+		
+		case CTRL_LED_ST_FW_UPD_OFF:
+			if (--ctrl_led_timer == 0) {
+				ctrl_set_led_state(CTRL_LED_ST_FW_UPD_ON);
+			}
+			break;
 	}
 }
 
@@ -398,6 +474,16 @@ static void ctrl_set_state(int new_st)
 				ctrl_set_led_state(CTRL_LED_ST_FLT_ON);
 			}
 			break;
+		
+		case CTRL_ST_FW_UPD_REQUEST:
+			// Start alternating red/green blink to indicate fw update request
+			ctrl_set_led_state(CTRL_LED_ST_FW_REQ_R);
+			break;
+		
+		case CTRL_ST_FW_UPD_PROCESS:
+			// Start fast green blink to indicate fw update is in progress
+			ctrl_set_led_state(CTRL_LED_ST_FW_UPD_ON);
+			break;
 	}
 }
 
@@ -445,6 +531,26 @@ static void ctrl_set_led_state(int new_st)
 			ctrl_led_timer = CTRL_FAULT_IDLE_MSEC / CTRL_EVAL_MSEC;
 			ctrl_set_led(CTRL_LED_OFF);
 			break;
+			
+		case CTRL_LED_ST_FW_REQ_R:
+			ctrl_led_timer = CTRL_FW_UPD_REQ_BLINK_MSEC / CTRL_EVAL_MSEC;
+			ctrl_set_led(CTRL_LED_RED);
+			break;
+			
+		case CTRL_LED_ST_FW_REQ_G:
+			ctrl_led_timer = CTRL_FW_UPD_REQ_BLINK_MSEC / CTRL_EVAL_MSEC;
+			ctrl_set_led(CTRL_LED_GRN);
+			break;
+
+		case CTRL_LED_ST_FW_UPD_ON:
+			ctrl_led_timer = CTRL_FAST_BLINK_MSEC / CTRL_EVAL_MSEC;
+			ctrl_set_led(CTRL_LED_GRN);
+			break;
+
+		case CTRL_LED_ST_FW_UPD_OFF:
+			ctrl_led_timer = CTRL_FAST_BLINK_MSEC / CTRL_EVAL_MSEC;
+			ctrl_set_led(CTRL_LED_OFF);
+			break;
 	}
 }
 
@@ -457,7 +563,11 @@ static void ctrl_handle_notifications()
 	if (xTaskNotifyWait(0x00, 0xFFFFFFFF, &notification_value, 0)) {
 		if (Notification(notification_value, CTRL_NOTIFY_STARTUP_DONE)) {
 			if (ctrl_state != CTRL_ST_FAULT) {
-				ctrl_set_state(CTRL_ST_WIFI_NOT_CONNECTED);
+				if (ctrl_ser_mode) {
+					ctrl_set_state(CTRL_ST_CLIENT_CONNECTED);
+				} else {
+					ctrl_set_state(CTRL_ST_WIFI_NOT_CONNECTED);
+				}
 			}
 		}
 		
@@ -467,7 +577,30 @@ static void ctrl_handle_notifications()
 		
 		if (Notification(notification_value, CTRL_NOTIFY_FAULT_CLEAR)) {
 			// Return to the pre-fault state
-			ctrl_set_state(ctrl_pre_fault_state);
+			ctrl_set_state(ctrl_pre_activity_state);
+		}
+		
+		if (Notification(notification_value, CTRL_NOTIFY_FW_UPD_REQ)) {
+			// Save the existing state to return to when the update is cleared
+			if (ctrl_state != CTRL_ST_FAULT) {
+				ctrl_pre_activity_state = ctrl_state;
+			}
+			ctrl_set_state(CTRL_ST_FW_UPD_REQUEST);
+		}
+		
+		if (Notification(notification_value, CTRL_NOTIFY_FW_UPD_PROCESS)) {
+			ctrl_set_state(CTRL_ST_FW_UPD_PROCESS);
+		}
+
+		if (Notification(notification_value, CTRL_NOTIFY_FW_UPD_DONE)) {
+			// Return to the pre-fault state
+			ctrl_set_state(ctrl_pre_activity_state);
+		}
+		
+		if (Notification(notification_value, CTRL_NOTIFY_FW_UPD_REBOOT)) {
+			// Delay a bit to allow any final communication to occur and then reboot
+			vTaskDelay(pdMS_TO_TICKS(500));
+			esp_restart();
 		}
 	}
 }

@@ -81,11 +81,15 @@ void lep_task()
 	
 	ESP_LOGI(TAG, "Start task");
 	
+	// ???
+	gpio_reset_pin(25);
+	gpio_set_direction(25, GPIO_MODE_OUTPUT);
+	gpio_set_level(25, 0);
+	
 	// Attempt to initialize the CCI interface
 	if (!cci_init()) {
 		ESP_LOGE(TAG, "Lepton CCI initialization failed");
 		rsp_set_cam_info_msg(RSP_INFO_INT_ERROR, "(FATAL) Lepton CCI initialization failed");
-		xTaskNotify(task_handle_rsp, RSP_NOTIFY_CAM_INFO_MASK, eSetBits);
 		vTaskDelete(NULL);
 	}
 	
@@ -112,9 +116,10 @@ void lep_task()
 				break;
 			
 			case STATE_RUN:   // Initialized and running
+				gpio_set_level(25, 1); // ???
 				// Spin waiting for vsync to be asserted
 				while (gpio_get_level(LEP_VSYNC_IO) == 0) {
-					vTaskDelay(pdMS_TO_TICKS(9));
+//					vTaskDelay(pdMS_TO_TICKS(9));
 				}
 				vsyncDetectedUsec = esp_timer_get_time();
 				
@@ -145,6 +150,9 @@ void lep_task()
 					// Hold fault counters reset while operating
 					sync_fail_count = 0;
 					reset_fail_count = 0;
+					gpio_set_level(25, 0); // ???
+					
+					vTaskDelay(pdMS_TO_TICKS(30));
 				} else {
 					// We should see a valid frame every 12 vsync interrupts (one frame period).
 					// However, since we may be resynchronizing with the VoSPI stream and our task

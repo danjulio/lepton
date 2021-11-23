@@ -95,6 +95,8 @@ extern TaskHandle_t task_handle_rsp;
 extern TaskHandle_t task_handle_mon;
 #endif
 
+
+
 //
 // Lepton configuration state
 //
@@ -108,18 +110,26 @@ extern json_config_t lep_st;
 extern lep_buffer_t rsp_lep_buffer[2];   // Ping-pong buffer loaded by lep_task for rsp_task
 
 // Big buffers
+extern char* rx_circular_buffer;                          // Used by cmd_utilities for incoming json data
+extern char* json_cmd_string;                             // Used by cmd_utilities to hold a parsed incoming json command
 extern json_image_string_t sys_image_rsp_buffer;          // Used by rsp_task for json formatted image data
 extern json_cmd_response_queue_t sys_cmd_response_buffer; // Loaded by cmd_task with json formatted response data
+
+// Firmware update segment
+extern uint8_t fw_upd_segment[];                          // Loaded by cmd_utilities for consumption in rsp_task
 
 
 
 //
 // System Utilities API
 //
-bool system_esp_io_init();
-bool system_peripheral_init();
+bool system_esp_io_init(bool ser_mode);
+bool system_peripheral_init(bool ser_mode);
 bool system_buffer_init();
+bool system_config_spi_slave(char* buf, int len);
+bool system_spi_slave_busy();
+void system_spi_wait_done();
 
-#define system_get_lep_st() (&lep_st)
+#define system_get_lep_st()   (&lep_st)
  
 #endif /* SYS_UTILITIES_H */

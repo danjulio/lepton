@@ -1,7 +1,7 @@
 /*
- * Cmd Task
+ * Command related utilities for use by either wifi_cmd_task or ser_cmd_task.
  *
- * Implement the command processing module including management of the WiFi interface.
+ * Includes functions to decode and execute commands.
  *
  * Copyright 2020-2021 Dan Julio
  *
@@ -18,18 +18,19 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with firecam.  If not, see <https://www.gnu.org/licenses/>.
+ * along with tCam.  If not, see <https://www.gnu.org/licenses/>.
  *
  */
-#include "cmd_task.h"
-#include "ctrl_task.h"
-#include "rsp_task.h"
+
+#include "cmd_utilities.h"
 #include "cci.h"
+#include "rsp_task.h"
 #include "json_utilities.h"
 #include "lepton_utilities.h"
 #include "ps_utilities.h"
 #include "sys_utilities.h"
 #include "time_utilities.h"
+#include "upd_utilities.h"
 #include "wifi_utilities.h"
 #include "system_config.h"
 #include "esp_system.h"
@@ -37,48 +38,30 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
-#include "lwip/err.h"
-#include "lwip/sockets.h"
-#include "lwip/sys.h"
-#include <lwip/netdb.h>
-
 
 
 //
-// CMD Task private constants
+// CMD Utilities private constants
 //
 
 // Uncomment to print commands
 //#define DEBUG_CMD
 
 
-
 //
-// CMD Task variables
+// CMD Utilities variables
 //
-static const char* TAG = "cmd_task";
+static const char* TAG = "cmd_utilities";
 
-// Client socket
-static int client_sock = -1;
-
-// Connected status
-static bool connected = false;
-
-// Main receive buffer for incoming packets
-static char rx_circular_buffer[CMD_MAX_TCP_RX_BUFFER_LEN];
+// Main receive buffer indicies
 static int rx_circular_push_index;
 static int rx_circular_pop_index;
 
-// json command string buffer
-static char json_cmd_string[JSON_MAX_CMD_TEXT_LEN];
 
 
 //
-// CMD Task Forward Declarations for internal functions
+// CMD Utilities Forward Declarations for internal functions
 //
-static void init_command_processor();
-static void push_rx_data(char* data, int len);
-static bool process_rx_data();
 static void process_rx_packet();
 static void push_response(char* buf, uint32_t len);
 static bool process_set_config(cJSON* cmd_args);
@@ -88,154 +71,20 @@ static bool process_set_time(cJSON* cmd_args);
 static bool process_set_wifi(cJSON* cmd_args);
 static bool process_get_lep_cci(cJSON* cmd_args);
 static bool process_set_lep_cci(cJSON* cmd_args);
+static bool process_fw_upd_request(cJSON* cmd_args);
+static bool process_fw_segment(cJSON* cmd_args);
 static int in_buffer(char c);
 
 
 
 //
-// CMD Task API
-//
-void cmd_task()
-{
-	char rx_buffer[128];
-    char addr_str[16];
-    int err;
-    int flag;
-    int len;
-    int listen_sock;
-    struct sockaddr_in destAddr;
-    struct sockaddr_in sourceAddr;
-    uint32_t addrLen;
-    
-	ESP_LOGI(TAG, "Start task");
-	
-	// Loop to setup socket, wait for connection, handle connection.  Terminates
-	// when client disconnects
-	
-	// Wait until WiFi is connected
-	if (!wifi_is_connected()) {
-		vTaskDelay(pdMS_TO_TICKS(500));
-	}
-
-	// Config IPV4
-    destAddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    destAddr.sin_family = AF_INET;
-    destAddr.sin_port = htons(CMD_PORT);
-    inet_ntoa_r(destAddr.sin_addr, addr_str, sizeof(addr_str) - 1);
-        
-    // socket - bind - listen - accept
-    listen_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
-    if (listen_sock < 0) {
-        ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
-        goto error;
-    }
-    ESP_LOGI(TAG, "Socket created");
-
-	flag = 1;
-  	setsockopt(listen_sock, SOL_SOCKET, SO_REUSEADDR, &flag, sizeof(flag));
-    err = bind(listen_sock, (struct sockaddr *)&destAddr, sizeof(destAddr));
-    if (err != 0) {
-        ESP_LOGE(TAG, "Socket unable to bind: errno %d", errno);
-         goto error;
-    }
-    ESP_LOGI(TAG, "Socket bound");
-    
-	while (1) {
-		init_command_processor();
-			
-        err = listen(listen_sock, 1);
-        if (err != 0) {
-            ESP_LOGE(TAG, "Error occured during listen: errno %d", errno);
-            break;
-        }
-        ESP_LOGI(TAG, "Socket listening");
-		
-        addrLen = sizeof(sourceAddr);
-        client_sock = accept(listen_sock, (struct sockaddr *)&sourceAddr, &addrLen);
-        if (client_sock < 0) {
-            ESP_LOGE(TAG, "Unable to accept connection: errno %d", errno);
-            break;
-        }
-        ESP_LOGI(TAG, "Socket accepted");
-        connected = 1;
-		
-        // Handle communication with client
-        while (1) {
-        	len = recv(client_sock, rx_buffer, sizeof(rx_buffer) - 1, MSG_DONTWAIT);
-            // Error occured during receiving
-            if (len < 0) {
-            	if ((errno == EAGAIN) || (errno == EWOULDBLOCK)) {
-            		if (wifi_is_connected()) {
-            			// Nothing there to receive, so just wait before calling recv again
-            			vTaskDelay(pdMS_TO_TICKS(50));
-            		} else {
-            			ESP_LOGI(TAG, "Closing connection");
-            			break;
-            		}
-            	} else {
-                	ESP_LOGE(TAG, "recv failed: errno %d", errno);
-                	break;
-                }
-            }
-            // Connection closed
-            else if (len == 0) {
-                ESP_LOGI(TAG, "Connection closed");
-                break;
-            }
-            // Data received
-            else {
-            	// Store new data
-            	push_rx_data(rx_buffer, len);
-        	
-            	// Look for and handle commands
-            	while (process_rx_data()) {}
-            }
-        }
-        
-        // Close this session
-        connected = false;
-        if (client_sock != -1) {
-            ESP_LOGI(TAG, "Shutting down socket and restarting...");
-            shutdown(client_sock, 0);
-            close(client_sock);
-        }
-	}
-
-error:
-	ESP_LOGI(TAG, "Something went seriously wrong with networking handling - bailing");
-	ctrl_set_fault_type(CTRL_FAULT_NETWORK);
-	vTaskDelete(NULL);
-	// ??? eventually delay for something like 10 seconds to show blinks then reboot
-}
-
-
-/**
- * True when connected to a client
- */
-bool cmd_connected()
-{
-	return connected;
-}
-
-
-/**
- * Return socket descriptor
- */
-int cmd_get_socket()
-{
-	return client_sock;
-}
-
-
-
-//
-// CMD Task internal functions
+// CMD Utilities API
 //
 
 /**
  * Initialize variables associated with receiving and processing commands
  */
-static void init_command_processor()
+void init_command_processor()
 {
 	rx_circular_push_index = 0;
 	rx_circular_pop_index = 0;
@@ -245,12 +94,12 @@ static void init_command_processor()
 /**
  * Push received data into our circular buffer
  */
-static void push_rx_data(char* data, int len)
+void push_rx_data(char* data, int len)
 {	
 	// Push the received data into the circular buffer
 	while (len-- > 0) {
 		rx_circular_buffer[rx_circular_push_index] = *data++;
-		if (++rx_circular_push_index >= CMD_MAX_TCP_RX_BUFFER_LEN) rx_circular_push_index = 0;
+		if (++rx_circular_push_index >= JSON_MAX_CMD_TEXT_LEN) rx_circular_push_index = 0;
 	}
 }
 
@@ -258,7 +107,7 @@ static void push_rx_data(char* data, int len)
 /**
  * See if we can find a complete json string to process
  */
-static bool process_rx_data() {
+bool process_rx_data() {
 	bool valid_string = false;
 	int begin, end, i;
 	
@@ -272,22 +121,22 @@ static bool process_rx_data() {
 			//
 			// Skip past start
 			while (rx_circular_pop_index != begin) {
-				if (++rx_circular_pop_index >= CMD_MAX_TCP_RX_BUFFER_LEN) rx_circular_pop_index = 0;
+				if (++rx_circular_pop_index >= JSON_MAX_CMD_TEXT_LEN) rx_circular_pop_index = 0;
 			}
 			
 			// Copy up to end
 			i = 0;
-			while ((rx_circular_pop_index != end) && (i < CMD_MAX_TCP_RX_BUFFER_LEN)) {
+			while ((rx_circular_pop_index != end) && (i < JSON_MAX_CMD_TEXT_LEN)) {
 				if (i < JSON_MAX_CMD_TEXT_LEN) {
 					json_cmd_string[i] = rx_circular_buffer[rx_circular_pop_index];
 				}
 				i++;
-				if (++rx_circular_pop_index >= CMD_MAX_TCP_RX_BUFFER_LEN) rx_circular_pop_index = 0;
+				if (++rx_circular_pop_index >= JSON_MAX_CMD_TEXT_LEN) rx_circular_pop_index = 0;
 			}
 			json_cmd_string[i] = 0;               // Make sure this is a null-terminated string
 			
 			// Skip past end
-			if (++rx_circular_pop_index >= CMD_MAX_TCP_RX_BUFFER_LEN) rx_circular_pop_index = 0;
+			if (++rx_circular_pop_index >= JSON_MAX_CMD_TEXT_LEN) rx_circular_pop_index = 0;
 			
 			if (i < JSON_MAX_CMD_TEXT_LEN+1) {
 				// Process json command string
@@ -297,7 +146,7 @@ static bool process_rx_data() {
 		} else {
 			// Unexpected end without start - skip it
 			while (rx_circular_pop_index != end) {
-				if (++rx_circular_pop_index >= CMD_MAX_TCP_RX_BUFFER_LEN) rx_circular_pop_index = 0;
+				if (++rx_circular_pop_index >= JSON_MAX_CMD_TEXT_LEN) rx_circular_pop_index = 0;
 			}
 		}
 	}
@@ -306,6 +155,10 @@ static bool process_rx_data() {
 }
 
 
+
+//
+// CMD Task internal functions
+//
 static void process_rx_packet()
 {
 	cJSON* json_obj;
@@ -316,7 +169,7 @@ static void process_rx_packet()
 	char cmd_st_buf[80];
 	static char* response_buffer;
 	static uint32_t response_length;
-	
+		
 	// Create a json object to parse
 	json_obj = json_get_cmd_object(json_cmd_string);
 #ifdef DEBUG_CMD
@@ -365,7 +218,6 @@ static void process_rx_packet()
 						} else {
 							ESP_LOGE(TAG, "Could not restart WiFi with the new configuration");
 							rsp_set_cam_info_msg(RSP_INFO_CMD_NACK, "Could not restart WiFi with the new configuration");
-							xTaskNotify(task_handle_rsp, RSP_NOTIFY_CAM_INFO_MASK, eSetBits);
 						}
 					} else {
 						cmd_success = 2;
@@ -426,6 +278,22 @@ static void process_rx_packet()
 						cmd_success = 2;
 					}
 					break;
+					
+				case CMD_FW_UPD_REQ:
+					if (process_fw_upd_request(cmd_args)) {
+						cmd_success = 1;
+					} else {
+						cmd_success = 2;
+					}
+					break;
+				
+				case CMD_FW_UPD_SEG:
+					if (process_fw_segment(cmd_args)) {
+						cmd_success = 0; // rsp_task will load success/failed cam_info response
+					} else {
+						cmd_success = 2;
+					}
+					break;
 				
 				case CMD_TAKE_PIC:
 				case CMD_RECORD_ON:			
@@ -477,9 +345,6 @@ static void process_rx_packet()
 			sprintf(cmd_st_buf, "Couldn't convert json string");
 			rsp_set_cam_info_msg(RSP_INFO_CMD_BAD, cmd_st_buf);
 			break;
-	}
-	if (cmd_success > 0) {
-		xTaskNotify(task_handle_rsp, RSP_NOTIFY_CAM_INFO_MASK, eSetBits);
 	}
 }
 
@@ -651,6 +516,44 @@ static bool process_set_lep_cci(cJSON* cmd_args)
 }
 
 
+static bool process_fw_upd_request(cJSON* cmd_args)
+{
+	char fw_version[UPD_MAX_VER_LEN];
+	uint32_t fw_length;
+	
+	if (json_parse_fw_upd_request(cmd_args, &fw_length, fw_version)) {		
+		// Setup rsp_task for an update
+		rsp_set_fw_upd_req_info(fw_length, fw_version);
+		
+		// Notify rsp_task
+		xTaskNotify(task_handle_rsp, RSP_NOTIFY_FW_UPD_REQ_MASK, eSetBits);
+		
+		return true;
+	}
+	
+	return false;
+}
+
+
+static bool process_fw_segment(cJSON* cmd_args)
+{
+	uint32_t seg_start;
+	uint32_t seg_length;
+	
+	if (json_parse_fw_segment(cmd_args, &seg_start, &seg_length, fw_upd_segment)) {
+		// Setup rsp_task for the segment
+		rsp_set_fw_upd_seg_info(seg_start, seg_length);
+		
+		// Notify rsp_task
+		xTaskNotify(task_handle_rsp, RSP_NOTIFY_FW_UPD_SEG_MASK, eSetBits);
+		
+		return true;
+	}
+	
+	return false;
+}
+
+
 /**
  * Look for c in the rx_circular_buffer and return its location if found, -1 otherwise
  */
@@ -663,9 +566,11 @@ static int in_buffer(char c)
 		if (c == rx_circular_buffer[i]) {
 			return i;
 		} else {
-			if (i++ >= CMD_MAX_TCP_RX_BUFFER_LEN) i = 0;
+			if (i++ >= JSON_MAX_CMD_TEXT_LEN) i = 0;
 		}
 	}
 	
 	return -1;
 }
+
+

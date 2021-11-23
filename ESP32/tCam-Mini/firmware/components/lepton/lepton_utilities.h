@@ -132,6 +132,7 @@
 // Lepton Utilities API
 //
 bool lepton_init();
+bool lepton_is_radiometric();
 void lepton_agc(bool en);
 void lepton_ffc();
 void lepton_gain_mode(uint8_t mode);

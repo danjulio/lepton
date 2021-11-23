@@ -1,8 +1,8 @@
 /*
- * tCam Main
+ * tCam-Mini Main
  *
  *
- * Copyright 2020 Dan Julio
+ * Copyright 2020-2021 Dan Julio
  *
  * This file is part of tCam.
  *
@@ -17,13 +17,15 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with firecam.  If not, see <https://www.gnu.org/licenses/>.
+ * along with tCam.  If not, see <https://www.gnu.org/licenses/>.
  */
 #include <stdio.h>
+#include <stdbool.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
-#include "cmd_task.h"
+#include "sif_cmd_task.h"
+#include "wifi_cmd_task.h"
 #include "ctrl_task.h"
 #include "lep_task.h"
 #include "mon_task.h"
@@ -37,20 +39,26 @@ static const char* TAG = "main";
 
 void app_main(void)
 {
+	bool ser_mode;
+	
     ESP_LOGI(TAG, "tCam Mini startup");
     
     // Start the control task to light the red light immediately
     xTaskCreatePinnedToCore(&ctrl_task, "ctrl_task", 2048, NULL, 1, &task_handle_ctrl, 0);
     
-    // Initialize the SPI and I2C drivers
-    if (!system_esp_io_init()) {
+    // Allow task to start and determine operating mode
+    vTaskDelay(pdMS_TO_TICKS(50));
+    ser_mode = ctrl_get_ser_mode();
+    
+    // Initialize the SPI and I2C drivers and determine the operating mode (wifi or serial comms)
+    if (!system_esp_io_init(ser_mode)) {
     	ESP_LOGE(TAG, "tCam Mini ESP32 init failed");
     	ctrl_set_fault_type(CTRL_FAULT_ESP32_INIT);
     	while (1) {vTaskDelay(pdMS_TO_TICKS(100));}
     }
     
     // Initialize the camera's peripheral devices
-    if (!system_peripheral_init()) {
+    if (!system_peripheral_init(ser_mode)) {
     	ESP_LOGE(TAG, "tCam Mini Peripheral init failed");
     	ctrl_set_fault_type(CTRL_FAULT_PERIPH_INIT);
     	while (1) {vTaskDelay(pdMS_TO_TICKS(100));}
@@ -64,7 +72,7 @@ void app_main(void)
     }
     
     // Delay for Lepton internal initialization on power-on (max 950 mSec)
-    vTaskDelay(pdMS_TO_TICKS(1000));
+    vTaskDelay(pdMS_TO_TICKS(900));
     
     // Notify control task that we've successfully started up
     xTaskNotify(task_handle_ctrl, CTRL_NOTIFY_STARTUP_DONE, eSetBits);
@@ -72,9 +80,15 @@ void app_main(void)
     // Start tasks
     //  Core 0 : PRO - everything but lepton task
     //  Core 1 : APP - lepton task
-    xTaskCreatePinnedToCore(&cmd_task, "cmd_task",  3072, NULL, 1, &task_handle_cmd,  0);
-    xTaskCreatePinnedToCore(&rsp_task, "rsp_task",  3072, NULL, 2, &task_handle_rsp,  0);
-    xTaskCreatePinnedToCore(&lep_task, "lep_task",  2048, NULL, 19, &task_handle_lep,  1);
+    if (ser_mode) {
+    	xTaskCreatePinnedToCore(&sif_cmd_task, "sif_cmd_task",  3072, NULL, 1, &task_handle_cmd,  0);
+    	xTaskCreatePinnedToCore(&rsp_task, "rsp_task",  3072, NULL, 19, &task_handle_rsp,  0);
+    	xTaskCreatePinnedToCore(&lep_task, "lep_task",  2048, NULL, 18, &task_handle_lep,  1);
+    } else {
+    	xTaskCreatePinnedToCore(&wifi_cmd_task, "wifi_cmd_task",  3072, NULL, 1, &task_handle_cmd,  0);
+    	xTaskCreatePinnedToCore(&rsp_task, "rsp_task",  3072, NULL, 18, &task_handle_rsp,  0);
+    	xTaskCreatePinnedToCore(&lep_task, "lep_task",  2048, NULL, 19, &task_handle_lep,  1);
+    }
 
 #ifdef INCLUDE_SYS_MON
 	xTaskCreatePinnedToCore(&mon_task, "mon_task",  2048, NULL, 1, &task_handle_mon,  0);

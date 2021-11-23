@@ -1,7 +1,7 @@
 /*
- * Cmd Task
+ * Command related utilities for use by either wifi_cmd_task or ser_cmd_task.
  *
- * Implement the command processing module including management of the WiFi interface.
+ * Includes functions to decode and execute commands.
  *
  * Copyright 2020-2021 Dan Julio
  *
@@ -18,11 +18,11 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with firecam.  If not, see <https://www.gnu.org/licenses/>.
+ * along with tCam.  If not, see <https://www.gnu.org/licenses/>.
  *
  */
-#ifndef CMD_TASK_H
-#define CMD_TASK_H
+#ifndef CMD_UTILITIES_H
+#define CMD_UTILITIES_H
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -30,7 +30,7 @@
 
 
 //
-// CMD Task Constants
+// CMD Utilities Constants
 //
 
 // Commands
@@ -54,8 +54,10 @@
 #define CMD_DEL_FS_OBJ  17
 #define CMD_GET_LEP_CCI 18
 #define CMD_SET_LEP_CCI 19
-#define CMD_UNKNOWN     20
-#define CMD_NUM         21
+#define CMD_FW_UPD_REQ  20
+#define CMD_FW_UPD_SEG  21
+#define CMD_UNKNOWN     22
+#define CMD_NUM         23
 
 // Command strings
 #define CMD_GET_STATUS_S "get_status"
@@ -78,6 +80,8 @@
 #define CMD_DEL_FS_OBJ_S  "delete_filesystem_obj"
 #define CMD_GET_LEP_CCI_S "get_lep_cci"
 #define CMD_SET_LEP_CCI_S "set_lep_cci"
+#define CMD_FW_UPD_REQ_S  "fw_update_request"
+#define CMD_FW_UPD_SEG_S  "fw_segment"
 
 
 // Delimiters used to wrap json strings sent over the network
@@ -85,12 +89,11 @@
 #define CMD_JSON_STRING_STOP  0x03
 
 
-
 //
-// CMD Task API
+// CMD Utilities API
 //
-void cmd_task();
-bool cmd_connected();
-int cmd_get_socket();
+void init_command_processor();
+void push_rx_data(char* data, int len);
+bool process_rx_data();
 
-#endif /* CMD_TASK_H */
+#endif /* CMD_UTILITIES_H */

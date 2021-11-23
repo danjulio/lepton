@@ -42,7 +42,7 @@
 #define WIFI_INFO_FLAG_CLIENT_MODE    0x80
 
 // Maximum attempts to reconnect to an AP in client mode before starting to wait
-#define WIFI_FAST_RECONNECT_ATTEMPTS   5
+#define WIFI_FAST_RECONNECT_ATTEMPTS  10
 
 // Maximum number of AP stations to record when scanning
 #define WIFI_MAX_SCAN_LIST_SIZE       10

@@ -669,6 +669,33 @@ void cci_set_gpio_mode(cci_gpio_mode_t mode)
 }
 
 
+/**
+ * Get the FLIR systems part number
+ *   - call with a 32-character buffer
+ */
+void cci_get_part_number(char* pn)
+{
+	bool low_half = true;
+	int i = 0;
+	uint16_t cci_buf[16];
+	
+	cci_get_reg(CCI_CMD_OEM_GET_PART_NUM, 16, cci_buf);
+	
+	*pn = (char) (cci_buf[0] & 0xFF);
+	while ((*pn != 0) && (i<16)) {
+		low_half = !low_half;
+		if (low_half) {
+			*(++pn) = (char) (cci_buf[i] & 0xFF);
+		} else {
+			*(++pn) = (char) (cci_buf[i] >> 8);
+			i++;
+		}
+	}
+	*(++pn) = 0;
+}
+
+
+
 //
 // Primitive access methods
 //

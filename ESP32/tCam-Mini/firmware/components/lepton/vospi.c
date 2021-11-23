@@ -112,6 +112,12 @@ int vospi_init()
 			ret = ESP_FAIL;
 		}
 	}
+	
+	// Setup our SPI transaction
+	memset(&lep_spi_trans, 0, sizeof(spi_transaction_t));
+	lep_spi_trans.tx_buffer = NULL;
+	lep_spi_trans.rx_buffer = lepPacketP;
+	lep_spi_trans.rxlength = LEP_PKT_LENGTH*8;
 
 	return ret;
 }
@@ -259,19 +265,9 @@ static bool transfer_packet(uint8_t* line, uint8_t* seg)
 	// *seg will be set if possible
 	*seg = 0;
 
-	// Setup our SPI transaction
-	memset(&lep_spi_trans, 0, sizeof(spi_transaction_t));
-	lep_spi_trans.tx_buffer = NULL;
-	lep_spi_trans.rx_buffer = lepPacketP;
-	lep_spi_trans.rxlength = LEP_PKT_LENGTH*8;
-
-	/************************************************************************************/
-    /* Note: queued transactions cause a panic when a task yields and I can't figure    */
-    /* it out.  Disabling queuing gets rid of the panic at some performance hit.        */
-    /************************************************************************************/
-	// Get a packet using the interrupt method and DMA engine to free the CPU some
-	//ret = spi_device_polling_transmit(spi, &lep_spi_trans);
-	ret = spi_device_transmit(spi, &lep_spi_trans);
+	// Get a packet
+	ret = spi_device_polling_transmit(spi, &lep_spi_trans);
+	//ret = spi_device_transmit(spi, &lep_spi_trans);
 	ESP_ERROR_CHECK(ret);
   
 	// Repeat as long as the frame is not valid, equals sync
