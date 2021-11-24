@@ -5,9 +5,10 @@ tCam and tCam-Mini are two cameras I designed around the ESP32 and Lepton 3.5.  
 tCam (still under development) is a full featured, battery powered camera with a local touchscreen display, local storage and a WiFi interface.
 
 ### tCam-Mini
-tCam-Mini is a smaller network-only camera designed for streaming and remote access.
+tCam-Mini is a smaller network-only camera designed for streaming and remote access.  It can be built using development boards or a tested unit can be purchased from [Group Gets](https://store.groupgets.com/collections/frontpage/products/tcam-mini-with-lepton-3-5-wireless-streaming-thermal-camera-board).
 
 ![tCam-Mini](pictures/tcam_mini.png)
+(Photo Credit: Matthew Navarro)
 
 ### Desktop Application
 Both cameras share a common command set for remote access.  A companion Desktop computer application may be used to configure and access the cameras as well as perform some analysis.

@@ -10,6 +10,14 @@ The "Firmware" directory contains a V4.0.2 Espressif ESP32 IDF project for tCam-
 
 Note: The precompiled firmware and Windows-based programming application can be downloaded directly from my [website](http://danjuliodesigns.com/products/tcam_mini.html) as well if you don't want to clone this entire repository.
 
+#### FW 2.0 (11/23/2021)
+FW revision 2.0 adds the following new features.  It is designed to run on the tCam-Mini PCBs with Revision 3 silicon and 8 MB Flash memory (camera's built using Revision 1 silicon or less than 8 MB Flash memory should use FW revision 1.3).
+
+1. Faster performance - often reaching the full 8.7 fps over wifi
+2. Support for Lepton 3.0 (as well, of course for Lepton 3.5 and FS)
+3. Support for OTA FW updates (from the Desktop Application 2.0).  After 2.0 is loaded they won’t have to use the serial IF and Espressif utility to load new firmware releases.
+4. Support for a new HW Slave interface (available on the next revision of HW) for direct connect to another Micro (I use this for tCam).
+
 ### Hardware
 The "Hardware" directory contains PCB gerbers, stencil gerbers, a BOM and a schematic PDF.  These can be used to build a tCam-Mini on the PCB I designed.  Of course you can also buy a pre-assembled unit from [Group Gets](https://store.groupgets.com/products/tcam-mini) with or without the Lepton.  See below for instructions on building one from commonly available development boards.
 
@@ -33,6 +41,8 @@ Please see the set of instructions in the DesktopApp folder in this repository f
 #### WiFi Reset Button
 Pressing and holding the WiFi Reset Button for more than five seconds resets the WiFi interface back to the default AP mode.  The status indicator will blink a pattern indicating the reset has occurred (see below).
 
+Pressing the button quickly when a OTA FW update has been requested (LED alternating red/green) by the Desktop application initiates the update process.
+
 #### Status Indicator
 A dual-color (red/green) LED is used to communicate status.  Combinations of color and blinking patterns communicate various information.
 
@@ -46,6 +56,8 @@ A dual-color (red/green) LED is used to communicate status.  Combinations of col
 |  | Client Mode : Connected to an AP |
 | Solid Green | WiFi is connected and external software has connected via the socket interface|
 | Fast Blink Yellow | WiFi Reset in progress |
+| Alternating Red/Green | Over-the-air FW update has been requested.  Press the button to initiate the update |
+| Blinking Green | FW update in process |
 | Series of Red Blinks | A fault has been detected.  The number of blinks indicate the fault type (see table below) |
 
 
@@ -58,6 +70,7 @@ A dual-color (red/green) LED is used to communicate status.  Combinations of col
 | 5 blinks | Lepton VoSPI communication failed (SPI interface) |
 | 6 blinks | Internal network error occurred |
 | 7 blinks | Lepton VoSPI synchronization cannot be achieved |
+| 8 blinks | Over-the-air FW Update failed |
 
 Additional start-up and fault information is available from the USB Serial interface.
 
@@ -85,6 +98,8 @@ The camera currently supports the following commands.  The communicating applica
 | set\_stream_off | Stops the camera from streaming images. |
 | get_wifi | Returns a packet with the camera's current WiFi and Network configuration. |
 | set_wifi | Set the camera's WiFi and Network configuration.  The WiFi subsystem is immediately restarted.  The application should immediately close its socket after sending this command.  Does not return anything. |
+| fw\_update_request | Informs the camera of a OTA FW update size and revision and starts it blinking the LED alternating between red and green to signal to the user a OTA FW update has been requested. |
+| fw\_segment | Sends a sequential chunk of the new FW during an OTA FW update. |
 
 The camera generates the following responses.
 
@@ -93,6 +108,7 @@ The camera generates the following responses.
 | cam_info | Generic information packet from the camera.  Status for commands that do not generate any other response.  May also contain alert or error messages from the camera. |
 | cci_reg | Response to both get\_cci\_reg and set\_cci\_reg commands. |
 | config | Response to get_config command. |
+| get_fw | Request a sequential chunk of the new FW during an OTA FW update. |
 | image | Response to get_image command or initiated periodically by the camera if streaming has been enabled. |
 | status | Response to get_status command. |
 | wifi | Response to get_wifi command. |
@@ -454,13 +470,78 @@ For example, ```cam_info``` for ```set_clock``` looks like.
 | 4 | Internal Error - the camera detected an internal error.  See the information string for more information. |
 | 5 | Debug Message - The information string contains an internal debug message from the camera (not normally generated). |
 
+#### fw\_update_request
+The ```fw_update_request``` command initiates the FW update process.
+
+```
+{
+  "cmd":"fw_update_request",
+  "args":{"length":730976,"version":"2.0"}
+}
+```
+
+All arugments are required.
+
+| fw\_update_request argument | Description |
+| --- | --- |
+| length | Length of binary file in bytes. |
+| version | Binary file version.  This must match the build version embedded in the binary file. |
+
+#### get_fw
+The camera requests a chunk of the binary file using the ```get_fw``` response after the user has initiated the update.  Currently the camera will request a maximum of 8192 bytes.
+
+```
+{
+  "get_fw":{
+    "start":0,
+    "length":8192
+  }
+}
+```
+
+| get_fw argument Item | Description |
+| --- | --- |
+| start | Starting byte of current chunk (offset into binary file). |
+| length | Number of bytes to send in a subsequent ```fw_segment```. |
+
+#### fw_segment
+Generated in response to a ```get_fw``` request.  Must always use the arguments in the ```get_fw``` request.
+
+```
+{
+  "cmd":"fw_segment",
+  "args":{
+    "start":0,
+    "length":8192,
+    "data":"6QYCMPwUCEDuAAAAAAADAAAAAAAAAAABIABAPwjEAQAyVM2rAAAAAAAAA..."
+  }
+}
+```
+
+| fw_segment Argument | Description |
+| --- | --- |
+| start | Starting byte of current chunk. |
+| length | Length of chunk in bytes. |
+| data | Base64 encoded binary data chunk. |
+
 #### Streaming (and a performance note)
 Streaming is a slightly special case for the command interface.  Responses are only generated after receiving the associated get command.  However the image response is generated repeatedly by the camera after streaming has been enabled at the rate, and for the number of times, specified in the set\_stream\_on command.
 
-While the task that services the Lepton is capable of getting the maximum 8.7 fps frame-rate out of the sensor, the task generating the image response and sending it through the ESP32's network and Wifi stacks may not always keep up.  It appears that the time required to send the data over the ESP32's Wifi interface varies depending on a several factors including the ESP32 antenna. I get better performance using an ESP32 module with an external antenna than with the built-in PCB antenna.
+While the task that services the Lepton is capable of getting the maximum 8.7 fps frame-rate out of the sensor, the task generating the image response and sending it through the ESP32's network and Wifi stacks may not always keep up.  It appears that the time required to send the data over the ESP32's Wifi interface varies depending on a several factors.
 
-Typical streaming rates vary from about 5-8 fps.  The fps display on the companion application will dip every time the Lepton performs a FFC because it is averaging over several seconds and the camera stops sending images during the FFC (about 1.5 seconds).
+Typical streaming rates vary from about 6-9 fps.  The fps display on the desktop application will dip every time the Lepton performs a FFC because it is averaging over several seconds and the camera stops sending images during the FFC (about 1.5 seconds).
  
+### OTA FW Update Process
+The OTA FW update process consists of several steps.  The FW is contained in the binary file ```tCamMini.bin``` in the precompiled FW directory or built using the Espressif IDF.  No other binary files are required.
+
+1. An external computer initiates the update process by sending a ```fw_update_request```.
+2. The camera starts blinking the LED in an alternating red/green pattern to indicate a FW update has been requested.  The user must press the Wifi Reset Button to confirm the update should proceed.
+3. The camera sends a ```get_fw``` to request a chunk of data from the computer.
+4. The computer sends a ```fw_segment``` with the requested data.
+5. Steps 3 and 4 are repeated until the entire firmware binary file has been transferred.
+6. The camera validates the binary file and sends a ```cam\_info``` indicating if the update is successful or has failed.  If successful the camera then reboots into the new firmware.
+
+
 ### Prototype
 My first tCam-Mini was built using a Sparkfun ESP32 Thing+ and a Lepton Breakout board from Group Gets.  I added an external PSRAM for more buffer space and a red/green LED (with current limiting resistors).  The GPIO0 button is the WiFi Reset Button.
 
