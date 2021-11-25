@@ -9,12 +9,23 @@ This repository contains the companion desktop application for the tCam cameras.
 * Save and load radiometric video (stream) files.
 * Export radiometric data as a common format image file.
 * Graph temperature at up to five points from a stream or video file.
+* Update camera firmware (tCam-Mini requires FW 2.0 and beyond).
 
 The application is developed using the [xojo](https://www.xojo.com) development environment.  64-bit binary images are provided for Mac OS X, Windows and x86 Linux systems.  A 32-bit binary image is provided for Raspbian.  Download the zip file for your platform.  The application can be run directly from the unzipped directory by double clicking the application binary icon.
 
 Note: Zip files for each application platform can be downloaded directly from my [website](http://danjuliodesigns.com/products/tcam_mini.html) as well if you don't want to clone this entire repository.
 
-#### Current Version
+#### Version History
+2.0.0 - Major update
+
+1. Add support for Lepton 3.0.
+2. Restore main window image display to default 480x320 pixel and allow main window to be resized.
+3. Changed log window to be able to shorten any long json packet.
+4. Added Banded, Black Hot and Sepia color palettes.
+5. Added support for OTA FW updates.
+6. Modified FPS calculations to use image timestamps (instead of local timestamps) and average across all samples.
+7. Misc internal clean up and minor bug fixes.
+
 1.2.1 - Fix IP address entry for international users.
 
 #### Platform Caveats
@@ -79,6 +90,7 @@ Camera controls are available when the application is connected to a camera.
 * Record - Start the camera recording a stream in its local storage (tCam only).  Equivalent to pressing the shutter button with the camera set to Video mode.
 * Download - Download a selected set of image or video files from the camera's local storage (tCam only).
 * Power - Switch the camera off (tCam only).
+* Update Firmware - Initiate a FW update process with cameras that can support it.
 
 #### Camera Settings Window
 The Camera Settings Window allows configuring the camera operation.  Items with the associated "Update Camera" checkbox set will be updated in the camera if Apply is pressed.
@@ -298,7 +310,7 @@ The Log Window displays connection/disconnection status messages and logs the tr
 It provides a simple set of controls.
 
 * Enable - Enable or disable logging.
-* Short Image Log - Shortens the approximately 55 KB image json packet to the string "RX Image...".
+* Shorten Json - Shortens long json strings (helpful when displaying image and FW update packets.
 * Filter Status - Filters out the ```get_status``` and ```status``` response packets which are sent periodically while the application is connected to the camera to verify connectivity.
 * Auto Scroll - Configures the window to automatically scroll when text reaches the bottom.
 * Clear - Clears all text.
@@ -326,10 +338,28 @@ The "video_info" json text string contains the starting and ending timestamps an
 
 Example files are found in the "sample_files" subdirectory here.
 
+### Firmware Updates
+The ```Update Firmware``` menu selection is available for cameras that support over-the-air FW updates.  Selecting it opens a file selection dialog box.  Open a FW binary file appropriate for the camera.
+
+* tCam-Mini - Open a ```tCamMini.bin``` binary file.
+* tCam - Open a ```tCam.bin``` binary file.
+
+An error message is displayed if the selected file is not the appropriate binary file for the connected camera.  A warning message is displayed if the selected file has a version that is equal to or less than the version the camera is currently running.
+
+Once a binary file has been loaded the camera will indicate that a firmware update has been requested.  The user must perform an action on the camera to initiate the update.
+
+* tCam-Mini - LED alternating green/red blinking pattern.  Press the Wifi Reset button to initiate the update.
+* tCam - Pop-up message appears on the LCD.  Select ```Confirm``` to initiate the udpate.
+
+A progress bar is displayed in a dialogue box during the firmware update.  The camera will reboot once the firmware udpate is completed successfully.  An error message is displayed if the update is unsuccessful.
+
 ### A Note about AGC
 This application is designed primarily for use with the Camera's Lepton outputting radiometric data because that data allow analysis of scene temperature, even from a stored image or video file.  A linear transformation is performed on the data to generate a visual image.  This image may not be as good, visually, as an image generated when the Lepton AGC is enabled so this mode is also supported for the cases where the user prefers a better image at the expense of being able to access the temperature of each pixel.  The Spotmeter is still functional in AGC mode so the temperature at one point can still be displayed.
 
 Read the Flir Lepton 3.5 datasheet for a better description of AGC mode (and why Flir is clearly so proud of it...).
+
+### A Note about the Lepton 3.0
+Since the Lepton 3.0 does not support Radiometric data output the application suppresses all temperature related controls and displays.
 
 ### Fin
 
