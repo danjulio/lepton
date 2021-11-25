@@ -123,8 +123,8 @@ Commands and responses are detailed below with example json strings.
 {
 	"status": {
 		"Camera":"tCam-Mini-EFB5",
-		"Model":2,
-		"Version":"1.0",
+		"Model":262402,
+		"Version":"2.0",
 		"Time":"17:33:49.0",
 		"Date":"2/3/21"
 	}
@@ -142,10 +142,12 @@ The get_status response may include additional information for other camera mode
 
 | Model Bit | Description |
 | --- | --- |
-| 31:18 | Reserved - Read as 0 |
+| 31:19 | Reserved - Read as 0 |
+| 18 | Supports over-the-air FW updates |
 | 17 | Has Filesystem Flag |
 | 16 | Has Battery Flag |
-| 15:8 | Reserved - Read as 0 |
+| 15:9 | Reserved - Read as 0 |
+| 8 | Non-radiometric Lepton installed (FW 2.0 and beyond) |
 | 7:0 | Camera Model Number - tCam-Mini is Model Number 2 |
 
 #### get_image
