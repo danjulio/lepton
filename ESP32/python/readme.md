@@ -38,3 +38,5 @@ The ```examples``` directory contains several example python programs using the 
 The example programs take command line arguments.  Look at the source code for example-specific arguments but all examples allow specifying the camera IP address as shown.  By default the TCam driver attempts to connect to the default tCam-as-AP address of ```192.168.4.1```.
 
 	disp_image.py -i 10.0.1.71
+
+Some of the demo programs like ```disp_file.py``` and ```dump_image.py``` must be run in the same directory as the ```palettes``` directory.
