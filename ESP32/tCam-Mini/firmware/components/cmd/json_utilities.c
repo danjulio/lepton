@@ -648,7 +648,11 @@ bool json_parse_set_wifi(cJSON* cmd_args, wifi_info_t* new_wifi_info)
 	if (cmd_args != NULL) {
 		if (cJSON_HasObjectItem(cmd_args, "ap_ssid")) {
 			s = cJSON_GetObjectItem(cmd_args, "ap_ssid")->valuestring;
-			if (strlen(s) <= PS_SSID_MAX_LEN) {
+			i = strlen(s);
+			if (i == 0) {
+				ESP_LOGE(TAG, "set_wifi zero length ap_ssid");
+				return false;
+			} else if (i <= PS_SSID_MAX_LEN) {
 				strcpy(new_wifi_info->ap_ssid, s);
 				item_count++;
 			} else {
@@ -661,7 +665,11 @@ bool json_parse_set_wifi(cJSON* cmd_args, wifi_info_t* new_wifi_info)
 		
 		if (cJSON_HasObjectItem(cmd_args, "sta_ssid")) {
 			s = cJSON_GetObjectItem(cmd_args, "sta_ssid")->valuestring;
-			if (strlen(s) <= PS_SSID_MAX_LEN) {
+			i = strlen(s);
+			if (i == 0) {
+				ESP_LOGE(TAG, "set_wifi zero length sta_ssid");
+				return false;
+			} else if (i <= PS_SSID_MAX_LEN) {
 				strcpy(new_wifi_info->sta_ssid, s);
 				item_count++;
 			} else {
@@ -674,11 +682,12 @@ bool json_parse_set_wifi(cJSON* cmd_args, wifi_info_t* new_wifi_info)
 		
 		if (cJSON_HasObjectItem(cmd_args, "ap_pw")) {
 			s = cJSON_GetObjectItem(cmd_args, "ap_pw")->valuestring;
-			if (strlen(s) <= PS_PW_MAX_LEN) {
+			i = strlen(s);
+			if ((i >= 8) && (i <= PS_PW_MAX_LEN)) {
 				strcpy(new_wifi_info->ap_pw, s);
 				item_count++;
 			} else {
-				ESP_LOGE(TAG, "set_wifi ap_pw: %s too long", s);
+				ESP_LOGE(TAG, "set_wifi ap_pw: %s must be between 8 and %d characters", s, PS_PW_MAX_LEN);
 				return false;
 			}
 		} else {
@@ -687,11 +696,12 @@ bool json_parse_set_wifi(cJSON* cmd_args, wifi_info_t* new_wifi_info)
 		
 		if (cJSON_HasObjectItem(cmd_args, "sta_pw")) {
 			s = cJSON_GetObjectItem(cmd_args, "sta_pw")->valuestring;
-			if (strlen(s) <= PS_PW_MAX_LEN) {
+			i = strlen(s);
+			if ((i >= 8) && (i <= PS_PW_MAX_LEN)) {
 				strcpy(new_wifi_info->sta_pw, s);
 				item_count++;
 			} else {
-				ESP_LOGE(TAG, "set_wifi sta_pw: %s too long", s);
+				ESP_LOGE(TAG, "set_wifi sta_pw: %s must be between 8 and %d characters", s, PS_PW_MAX_LEN);
 				return false;
 			}
 		} else {

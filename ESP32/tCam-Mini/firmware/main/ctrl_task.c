@@ -311,12 +311,23 @@ static void ctrl_eval_sm()
 		case CTRL_ST_RESET_ACTION:
 			wifi_info = wifi_get_info();
 			if ((wifi_info->flags & WIFI_INFO_FLAG_ENABLED) == WIFI_INFO_FLAG_ENABLED) {
-				ctrl_set_state(CTRL_ST_WIFI_NOT_CONNECTED);
+				if (ctrl_fault_type == CTRL_FAULT_NONE) {
+					ctrl_set_state(CTRL_ST_WIFI_NOT_CONNECTED);
+				} else {
+					// Return to previous fault indication to encourage user to power-cycle since
+					// we may be halted in main due to the original error
+					ctrl_set_state(CTRL_ST_FAULT);
+				}
 			}
 			break;
 		
 		case CTRL_ST_FAULT:
-			// Remain here until taken out if the fault is cleared
+			// Remain here until taken out if the fault is cleared or the user resets the wifi (wifi mode)
+			if (!ctrl_ser_mode) {
+				if (btn_long_press) {
+					ctrl_set_state(CTRL_ST_RESET_ALERT);
+				}
+			}
 			break;
 		
 		case CTRL_ST_FW_UPD_REQUEST:
