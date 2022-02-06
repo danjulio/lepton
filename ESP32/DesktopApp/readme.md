@@ -16,6 +16,15 @@ The application is developed using the [xojo](https://www.xojo.com) development 
 Note: Zip files for each application platform can be downloaded directly from my [website](http://danjuliodesigns.com/products/tcam_mini.html) as well if you don't want to clone this entire repository.
 
 #### Version History
+2.1.0 - Major performance enhancement
+
+1. Optimize compilation and add preference item to disable bilinear interpolation if desired to increase performance on slow computers and when the image has been resized.  This fixes the issue where the UI seemed frozen while streaming.
+2. Add check for minimum 8-character password when setting Wifi.
+3. Fix bug where spot meter info is displayed when AGC enabled on a camera with a Lepton 3.5.
+4. Fixed bugs in displaying garbage metadata when exporting images from a camera with a Lepton 3.0.
+5. Fixed bug where application could crash when exporting an image to a protected directory.
+6. Increased the width of some labels to display fully on Linux.
+
 2.0.0 - Major update
 
 1. Add support for Lepton 3.0.
@@ -52,6 +61,7 @@ The preferences window is used to configure the application.  Preferences are st
 * Display Units - Allows setting the unit display used throughout the main window.
 * Stream Rate - Allows setting the requested stream rate from the camera when streaming is enabled (fastest possible rate down to one image every five minutes)
 * Update Camera Clock - Causes the application to set the camera's built-in clock to the current computer time on each connection.  The clock is used to timestamp images.
+* Scale Display using Bilinear interpolation - Uses an algorithm that results in a slightly smoother image as it is increased from the camera's native 160x120 pixel resolution.  De-selecting this uses a much faster algorithm that will work better on slower computers and when resizing the image at the cost of some smoothness.
 * Export Resolution - Sets the size of an exported image (160x120 pixels to 640x480 pixels) and specifies if only the image or the image plus additional information is rendered to the exported file.
 * Download Folder - Sets the default folder for downloaded/saved images.
 
@@ -108,8 +118,8 @@ Configuration items affect the Lepton's operation.
 WiFi items include whether the camera is acting as an Access Point (AP) or connecting to an AP (Client mode), the associated SSID and password and if a static IP should be set (in Client mode only - the camera always has the IP address of 192.168.4.1 in AP mode).
 
 * Camera is Access Point checkbox - Configure the camera's Wifi Mode as either Access Point (it creates a Wifi Network) or Client (it connects to another Wifi Network).
-* SSID - The Wifi Network SSID.  This is the name of the WiFi Network the camera will create if it is in AP mode or the name of the WiFi Network it will attempt to connect to in Client mode.
-* Password - The Wifi Network WPA password.  This is the password that is necessary to connect to the camera's WiFi Network if it is in AP mode or the password it will use to connect the another WiFi Network in Client mode.  Leave the field blank if there is no password.
+* SSID - The Wifi Network SSID.  This is the name of the WiFi Network the camera will create if it is in AP mode or the name of the WiFi Network it will attempt to connect to in Client mode.  The maximum length is 32 characters.
+* Password - The Wifi Network WPA password.  This is the password that is necessary to connect to the camera's WiFi Network if it is in AP mode or the password it will use to connect the another WiFi Network in Client mode.  Leave the field blank if there is no password, otherwise the password must be between 8 - 32 characters long.
 * Enable Camera WiFi - May be used to completely disable the camera's Wifi Network.  Once disabled the camera's WiFi Network must be re-enabled manually.  tCam-Mini will need to have a WiFi reset performed to switch the WiFi back on.  The tCam GUI can be used to switch its Wifi back on.
 * Camera Client Static Address - Selecting this checkbox and filling in the associated IPV4 address field allows configuring the camera with a static IPV4 address.  This only applies to the camera when it is operating in Client mode.  The address must be on the client network and should not be in a range the network's router might assign automatically using DHCP.  De-selecting the checkbox will enable the camera to request a DHCP served IPV4 address from the router.
 * Netmask - The netmask to use when using a static IPV4 address.  Usually this will be "255.255.255.0".
