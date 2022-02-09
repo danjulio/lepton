@@ -16,6 +16,10 @@ The application is developed using the [xojo](https://www.xojo.com) development 
 Note: Zip files for each application platform can be downloaded directly from my [website](http://danjuliodesigns.com/products/tcam_mini.html) as well if you don't want to clone this entire repository.
 
 #### Version History
+2.1.1
+
+1. Fixed, yet again, AGC display of spot meter information…*sigh*
+
 2.1.0 - Major performance enhancement
 
 1. Optimize compilation and add preference item to disable bilinear interpolation if desired to increase performance on slow computers and when the image has been resized.  This fixes the issue where the UI seemed frozen while streaming.
