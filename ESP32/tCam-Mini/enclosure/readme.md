@@ -3,7 +3,7 @@
 ### 3D printed case
 My simple 3D printed enclosure and a GoPro™ compatible mount attachment for both the Rev 2 and Rev 4 PCB tCam-Mini designs, along with the source OpenSCAD program can be found in ```tcam_mini_basic```.
 
-The enclosure is designed to be fastened together using 4 4-40 x 5/8" metal screws (or the M3 equivalent for the rest of the world).
+The enclosure is designed to be fastened together using 4 4-40 x 3/8" metal screws (or the M3 equivalent for the rest of the world).
 
 ![Assembled units for Rev 2 and 4](pictures/tcam_mini_encl_sides.png)
 
