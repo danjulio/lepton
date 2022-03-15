@@ -13,7 +13,7 @@ The STL files are generated using the ```tcam_mini_basic_encl.scad``` [OpenSCAD]
 2. ```tcam_mini_rev2_encl.stl``` - Enclosure base for Rev 2 PCB based boards.
 3. ```tcam_mini_rev4_encl.stl``` - Enclosure base for Rev 4 PCB based boards.
 
-The enclosure is designed to be fastened together using 4 4-40 x 5/8" metal screws (or the M3 equivalent for the rest of the world).
+The enclosure is designed to be fastened together using 4 4-40 x 3/8" metal screws (or the M3 equivalent for the rest of the world).
 
 ![Enclosure parts](pictures/tcam_mini_encl_parts.png)
 
