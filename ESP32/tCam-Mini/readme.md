@@ -581,6 +581,20 @@ The components are wired together as shown below.
 
 ![ttgo wiring diagram](pictures/ttgo_based_tcam_mini.png)
 
+#### ESP32 Connections
+
+| ESP32 GPIO | Connection |
+| --- | --- |
+|  0 | Button |
+|  5 | Lepton SPI SCK |
+| 12 | Lepton SPI CSN |
+| 13 | Lepton Vsync |
+| 14 | Red LED Anode |
+| 15 | Green LED Anode |
+| 19 | Lepton SPI MISO |
+| 22 | Lepton I2C SCL |
+| 23 | Lepton I2C SDA |
+
 #### ESP Revision Note
 The modules I buy from Mouser and that Group Gets sources for the PCB design include a Rev 3 ESP32 chip and I compile for that version.  I found that the TTGO module had a Rev 1 ESP32 chip so I also recompiled the project for Rev 1.  The binary files for that revision can also be found in the firmware/precompiled subdirectory.  The camera won't boot if you use the wrong chip revision.
 
