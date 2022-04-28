@@ -1,9 +1,11 @@
 ## tCam-Mini
-tCam-Mini was created using code from the tCam project and ended up being finished first.  It is a simple device, hardware-wise, consisting of an ESP32 WROVER module, USB UART for programming and debug, Lepton 3.5 and supporting voltage regulators and oscillator.
+tCam-Mini was created using code from the tCam project and ended up being finished first.  It is a simple device, hardware-wise, consisting of an ESP32 WROVER module, USB UART for programming and debug, Lepton 3.0/3.5 and supporting voltage regulators and oscillator.
 
-![tCam-Mini Front and Back](pictures/tcam_mini_pcb_r2.png)
+![tCam-Mini Front and Back](pictures/tcam_mini_pcb_r4.png)
 
-It has a I2C expansion port that I intend to use to explore adding additional sensing capability such as humidity, distance and lens temperature to increase the camera's accuracy.
+(image courtesy of Group Gets)
+
+Revision 4 of the PCB, along with FW 2.0, introduces a new hardware expansion port that can be used by an external micro-controller or single-board computer to communicate with tCam-Mini directly instead of using WiFi.  It also has an I2C expansion port that is currently unused, a USB-C connector and surface-mount LED.
 
 ### Firmware
 The "Firmware" directory contains a V4.0.2 Espressif ESP32 IDF project for tCam-Mini. You should be able to build and load it into a camera using the IDF commands (I still use "make program monitor").  There are also a set of precompiled binaries in the "precompiled" sub-directory.  You can use the Espressif tool and instructions found in the "programming" directory in parallel to this one to load those into a camera without having to build the project.
@@ -11,43 +13,32 @@ The "Firmware" directory contains a V4.0.2 Espressif ESP32 IDF project for tCam-
 Note: The precompiled firmware and Windows-based programming application can be downloaded directly from my [website](http://danjuliodesigns.com/products/tcam_mini.html) as well if you don't want to clone this entire repository.
 
 #### FW 2.1 (2/5/2022)
-FW revision 2.1 fixes the following issues.  It is designed to run on the tCam-Mini PCBs with Revision 3 silicon and 8 MB Flash memory (camera's built using Revision 1 silicon or less than 8 MB Flash memory should use FW revision 1.3).  It fixes an issue where setting a password of less than 8 characters would brick the tCam-Mini (requiring reload of firwmare using the Windows utility).
+FW revision 2.1 fixes the following issues.  It is designed to run on the tCam-Mini PCBs with Revision 3 silicon and 8 MB Flash memory (camera's built using Revision 1 silicon or less than 8 MB Flash memory should use FW revision 1.3).  It fixes an issue where setting a password of less than 8 characters would brick the tCam-Mini (requiring reload of firmware using the Windows utility).
 
 1. Prevent updating Wifi password if the length is less than 8 characters to avoid a condition where the ESP32 wifi library fails on boot and the camera can't be reconfigured.
-2. Add the ability to reset wifi even when the camera has detected a hardware fault on boot (backup solution to #1 above).
+2. Add the ability to reset WiFi even when the camera has detected a hardware fault on boot (backup solution to #1 above).
 
 #### FW 2.0 (11/23/2021)
 FW revision 2.0 adds the following new features.  It is designed to run on the tCam-Mini PCBs with Revision 3 silicon and 8 MB Flash memory (camera's built using Revision 1 silicon or less than 8 MB Flash memory should use FW revision 1.3).
 
-1. Faster performance - often reaching the full 8.7 fps over wifi
-2. Support for Lepton 3.0 (as well, of course for Lepton 3.5 and FS)
-3. Support for OTA FW updates (from the Desktop Application 2.0).  After 2.0 is loaded they won’t have to use the serial IF and Espressif utility to load new firmware releases.
-4. Support for a new HW Slave interface (available on the next revision of HW) for direct connect to another Micro (I use this for tCam).
+1. Faster performance - often reaching the full 8.7 fps over WiFi.
+2. Support for Lepton 3.0.
+3. Support for OTA FW updates (from the Desktop Application 2.0). It won’t be necessary to use the serial IF and Espressif utility to load new firmware releases after 2.0 is loaded.
+4. Support for a new HW Slave interface (available on PCB revision 4) for direct connect to another Micro (I use this for tCam).
 
 ### Hardware
-The "Hardware" directory contains PCB gerbers, stencil gerbers, a BOM and a schematic PDF.  These can be used to build a tCam-Mini on the PCB I designed.  Of course you can also buy a pre-assembled unit from [Group Gets](https://store.groupgets.com/products/tcam-mini) with or without the Lepton.  See below for instructions on building one from commonly available development boards.
+The "Hardware" directory contains PCB and stencil Gerber files, a BOM and a schematic PDF.  These can be used to build a tCam-Mini on the PCB I designed.  Of course you can also buy a pre-assembled unit from [Group Gets](https://store.groupgets.com/products/tcam-mini) with or without the Lepton.  See below for instructions on building one from commonly available development boards.
 
 Note: My interests are in radiometric thermography so I have focused primarily on the Lepton 3.5.  The Lepton 3.0 is supported starting with FW 2.0.  It should be possible for someone to modify my firmware source to work with the Lepton 2 and 2.5 models by modifying the task that reads the lepton (probably easiest to modify the code that reads the data and then just pixel-double it before handing it off to other tasks).  I will be happy to include a link to anyone else's clone of my code that supports these older Leptons.
 
 ### Operation
-tCam-Mini is a command-based device.  It is designed for software running on another device to control it and receive responses and image data from it.  The software communicates with tCam-Mini via a socket interface with commands, responses and images encoded as json packets.  Data is not encrypted so appropriate care should be taken.
+tCam-Mini is a command-based device.  It is designed for software running on another device to control it and receive responses and image data from it.  The software communicates with tCam-Mini via one of two ways depending on the polarity of the Mode input at boot.
+
+1. Mode bit left disconnected (pulled high) configures communication via WiFi using a socket interface with commands, responses and images encoded as json packets.  Data is not encrypted so appropriate care should be taken.
+2. Mode bit low (grounded) configures communication via the Hardware Interface using a serial interface and a slave SPI interface.  Commands and responses are sent as json packets over the serial interface.  A new "image_ready" packet indicates that the controller can read an image from the SPI interface.
 
 #### USB Port
 The USB Port provides a USB Serial interface supporting automatic ESP32 reset and boot-mode entry for programming.  It is also used for serial logging output by the ESP32 firmware (115,200 baud).
-
-#### WiFi
-tCam-Mini can act as either an Access Point (creating its own WiFi network) or a client (connecting to an existing WiFi network).  It acts as an Access Point (AP) by default.  It selects an SSID based on a unique MAC ID in the ESP32 with the form "tCam-Mini-HHHH" where "HHHH" are the last four hexadecimal digits of the MAC ID.  There is no password by default.  When acting as an Access Point, each tCam-Mini always has the same default IPV4 address (192.168.4.1).
-
-It can be reconfigured via a command (for example, from the desktop application) to act as a WiFi Client (STAtion mode) and connect to an existing WiFi network.  When configured as a WiFi Client, it can either get a DHCP served address from the network's router or it can also be reconfigured to have a fixed (static) IPV4 address.  Using a static address makes it easier to connect to tCam-Mini because you don't have to find out what DHCP address the router gave it by logging into the router or using a utility like the Fing Android app or nmap on Linux.
-
-Currently only one device can connect to the camera at a time.
-
-Please see the set of instructions in the DesktopApp folder in this repository for connecting to tCam-Mini in either mode.
-
-#### WiFi Reset Button
-Pressing and holding the WiFi Reset Button for more than five seconds resets the WiFi interface back to the default AP mode.  The status indicator will blink a pattern indicating the reset has occurred (see below).
-
-Pressing the button quickly when a OTA FW update has been requested (LED alternating red/green) by the Desktop application initiates the update process.
 
 #### Status Indicator
 A dual-color (red/green) LED is used to communicate status.  Combinations of color and blinking patterns communicate various information.
@@ -55,12 +46,13 @@ A dual-color (red/green) LED is used to communicate status.  Combinations of col
 | Status Indicator | Meaning |
 | --- | --- |
 | Off or Dim | Firmware did not start |
-| Solid Red | Firmware is running: initializing and configuring the Lepton and WiFi |
-| Blinking Yellow | AP Mode : No client connected to camera's WiFi |
-|  | Client Mode : Not connected to an AP |
-| Solid Yellow | AP Mode : Client connected to camera'sWiFi |
-|  | Client Mode : Connected to an AP |
-| Solid Green | WiFi is connected and external software has connected via the socket interface|
+| Solid Red | Firmware is running: initializing and configuring the Lepton and WiFi (when configured to use WiFi)|
+| Blinking Yellow | WiFi AP Mode : No client connected to camera's WiFi |
+|  | WiFi Client Mode : Not connected to an AP |
+| Solid Yellow | WiFi AP Mode : Client connected to camera'sWiFi |
+|  | WiFi Client Mode : Connected to an AP |
+| Solid Green | Wifi Mode : WiFi is connected and external software has connected via the socket interface|
+|  | Hardware Interface Mode : Camera is ready for operation |
 | Fast Blink Yellow | WiFi Reset in progress |
 | Alternating Red/Green | Over-the-air FW update has been requested.  Press the button to initiate the update |
 | Blinking Green | FW update in process |
@@ -80,10 +72,34 @@ A dual-color (red/green) LED is used to communicate status.  Combinations of col
 
 Additional start-up and fault information is available from the USB Serial interface.
 
-### Command Interface
-The camera is capable of executing a set of commands and generating responses or sending image data when connected to a remote computer via the WiFi interface.  It can support one remote connection at a time.  Commands and responses are encoded as json-structured strings.  The command interface exists as a TCP/IP socket at port 5001.
+#### WiFi
+tCam-Mini can act as either an Access Point (creating its own WiFi network) or a client (connecting to an existing WiFi network).  WiFi is enabled when the Mode input is high (left floating) when tCam-Mini boots.  The camera acts as an Access Point (AP) by default.  It selects an SSID based on a unique MAC ID in the ESP32 with the form "tCam-Mini-HHHH" where "HHHH" are the last four hexadecimal digits of the MAC ID.  There is no password by default.  When acting as an Access Point, each tCam-Mini always has the same default IPV4 address (192.168.4.1).
 
-Each json command or response is delimited by two characters.  A start delimitor (value 0x02) preceeds the json string.  A end delimitor (value 0x03) follows the json string.  The json string may be tightly packed or may contain white space.  However no command may exceed 256 bytes in length.
+It can be reconfigured via a command (for example, from the desktop application) to act as a WiFi Client (STAtion mode) and connect to an existing WiFi network.  When configured as a WiFi Client, it can either get a DHCP served address from the network's router or it can also be reconfigured to have a fixed (static) IPV4 address.  Using a static address makes it easier to connect to tCam-Mini because you don't have to find out what DHCP address the router gave it by logging into the router or using a utility like the Fing Android app or nmap on Linux.
+
+Currently only one device can connect to the camera at a time.
+
+Please see the set of instructions in the DesktopApp folder in this repository for connecting to tCam-Mini in either mode.
+
+#### WiFi Reset Button
+Pressing and holding the WiFi Reset Button for more than five seconds resets the WiFi interface back to the default AP mode.  The status indicator will blink a pattern indicating the reset has occurred (see below).
+
+Pressing the button quickly when an OTA FW update has been requested (LED alternating red/green) by the Desktop application initiates the update process.
+
+#### Hardware Interface
+The hardware interface is enabled when the Mode input is low (grounded) when tCam-Mini boots.
+
+![tCam-Mini Hardware Interface](pictures/hw_if.png)
+
+The serial port (running at 230,800 baud) is used to send and receive commands and responses as described below.  Instead of sending an "image" response over the relatively slow serial port, the firmware sends an "image_ready" response to notify software running on the external system that it can read the image from the slave SPI port using a master SPI peripheral.
+
+The slave SPI port is partially handled by a driver running on the ESP32.  For this reason the highest supported clock rate is 8 MHz.  Too fast and the ESP32 slave SPI driver can't keep up.  I found success running the interface around 7 MHz.
+
+
+### Command Interface
+The camera is capable of executing a set of commands and generating responses or sending image data when connected to a remote computer via one of the interfaces.  It can support one remote connection at a time.  Commands and responses are encoded as json-structured strings.  The command interface exists as a TCP/IP socket at port 5001 when using WiFi.
+
+Each json command or response is delimited by two characters.  A start delimiter (value 0x02) precedes the json string.  A end delimiter (value 0x03) follows the json string.  The json string may be tightly packed or may contain white space.  However no command may exceed 256 bytes in length.
 
 ```<0x02><json string><0x03>```
 
@@ -154,12 +170,12 @@ The get_status response may include additional information for other camera mode
 | 16 | Has Battery Flag |
 | 15:9 | Reserved - Read as 0 |
 | 8 | Non-radiometric Lepton installed (FW 2.0 and beyond) |
-| 7:0 | Camera Model Number - tCam-Mini is Model Number 2 |
+| 7:0 | Camera Model Number - tCam-Mini reports 2 when using the WiFI interface and 3 when using the Hardware interface |
 
 #### get_image
 ```{"cmd":"get_image"}```
 
-#### get_image response (or initiated periodically while streaming)
+#### [WiFi only] get_image response (or initiated periodically while streaming)
 ```
 {
 	"metadata":	{
@@ -179,6 +195,15 @@ The get_status response may include additional information for other camera mode
 | metadata | Camera status information at the time the image was acquired. |
 | radiometric | Base64 encoded Lepton pixel data (19,200 16-bit words / 38,400 bytes).  Each pixel contains a 16-bit absolute (Kelvin) temperature value when the Lepton is operating in Radiometric output mode.  The Lepton's gain mode specifies the resolution (0.01 K in High gain, 0.1 K in Low gain). Each pixel contains an 8-bit value when the Lepton has AGC enabled. |
 | telemetry | Base64 encoded Lepton telemetry data (240 16-bit words / 480 bytes).  See the Lepton Datasheet for a description of the telemetry contents. |
+
+#### [Hardware Interface only] image_ready response (or initiated periodically while streaming)
+```{"image_ready": 51980}```
+
+The ```image_ready``` response indicates that an image is available to read from the slave SPI interface.  The value indicates the number of bytes to read. It will always be a multiple of 4 bytes.  The image must be read from the slave SPI interface before another image will be sent (the camera's response process hangs until the image is read).
+
+The image data is the ```get_image response``` data described above, followed by 4 checksum bytes, followed by 0-3 dummy bytes necessary to round the total size to a multiple of 4 bytes.
+
+The checksum is simply the 32-bit sum of all ```get_image response``` bytes with the high byte first.  It is used to validate that the SPI transfer successfully sent all bytes.  On occasion the ESP32 slave SPI driver may fail to keep up and the checksum can be used to discard corrupt images.
 
 #### get\_lep_cci
 ```
@@ -490,7 +515,7 @@ The ```fw_update_request``` command initiates the FW update process.
 }
 ```
 
-All arugments are required.
+All arguments are required.
 
 | fw\_update_request argument | Description |
 | --- | --- |
@@ -511,7 +536,7 @@ The camera requests a chunk of the binary file using the ```get_fw``` response a
 
 | get_fw argument Item | Description |
 | --- | --- |
-| start | Starting byte of current chunk (offset into binary file). |
+| start | Starting byte of the current chunk (offset into binary file). |
 | length | Number of bytes to send in a subsequent ```fw_segment```. |
 
 #### fw_segment
@@ -551,6 +576,8 @@ The OTA FW update process consists of several steps.  The FW is contained in the
 5. Steps 3 and 4 are repeated until the entire firmware binary file has been transferred.
 6. The camera validates the binary file and sends a ```cam\_info``` indicating if the update is successful or has failed.  If successful the camera then reboots into the new firmware.
 
+### Previous version
+![tCam-Mini Front and Back](pictures/tcam_mini_pcb_r2.png)
 
 ### Prototype
 My first tCam-Mini was built using a Sparkfun ESP32 Thing+ and a Lepton Breakout board from Group Gets.  I added an external PSRAM for more buffer space and a red/green LED (with current limiting resistors).  The GPIO0 button is the WiFi Reset Button.

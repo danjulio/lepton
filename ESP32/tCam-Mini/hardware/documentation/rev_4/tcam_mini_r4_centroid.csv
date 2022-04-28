@@ -1,0 +1,59 @@
+Screaming Circuits SMD component position file.
+Created by Centroid_ScreamingCircuits_smd.ulp 1.2.0.
+
+Centroid Data for pc board: "tcam_mini.brd" as of: 4/13/22 6:53 AM
+Measurements are in inches. Comma delimited
+Only surface mount components included
+
+RefDes,Layer,LocationX,LocationY,Rotation
+C1,Top,0.325,0.175,0
+C2,Top,0.575,0.850,180
+C3,Top,0.700,0.975,270
+C4,Top,0.575,0.950,180
+C5,Top,0.575,1.025,180
+C6,Top,0.450,0.450,0
+C7,Top,0.625,0.325,180
+C8,Top,0.850,0.400,270
+C9,Top,1.150,0.400,270
+C10,Top,0.850,0.225,270
+C11,Top,1.150,0.225,270
+C12,Top,0.450,0.600,0
+C13,Top,0.625,0.700,270
+C14,Top,1.500,0.225,0
+C15,Top,1.500,0.300,0
+C16,Top,1.365,0.300,180
+C17,Top,0.700,0.700,270
+C18,Top,1.225,0.400,270
+C19,Top,1.350,0.695,180
+C20,Top,1.350,1.000,180
+C21,Top,1.175,1.150,270
+CON1,Top,0.100,1.000,270
+D1,Top,0.425,1.050,180
+D2,Top,0.100,0.600,90
+L1,Top,0.625,0.425,0
+M1,Bottom,1.225,0.750,90
+PB1,Top,0.100,0.350,270
+Q1,Top,1.250,1.400,270
+Q2,Top,0.950,1.400,270
+Q3,Top,1.350,1.125,180
+R1,Top,0.200,1.250,180
+R2,Top,0.150,0.750,0
+R3,Top,0.895,1.110,270
+R4,Top,0.625,0.250,0
+R5,Top,0.450,0.250,0
+R6,Top,1.365,0.225,180
+R7,Top,1.100,1.400,90
+R8,Top,0.800,1.400,90
+R9,Top,1.350,0.925,180
+R10,Top,1.350,1.250,0
+R11,Top,0.250,0.550,180
+R12,Top,0.250,0.650,180
+R13,Top,1.350,0.620,0
+R14,Top,1.350,0.545,0
+S1,Top,1.000,0.750,0
+U1,Top,0.725,1.150,0
+U2,Top,0.450,0.350,90
+U3,Top,1.000,0.400,270
+U4,Top,1.000,0.225,270
+U5,Top,0.475,0.700,270
+U6,Top,1.050,1.150,270
