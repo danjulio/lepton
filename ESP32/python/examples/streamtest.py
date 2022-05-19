@@ -1,8 +1,13 @@
+#!/usr/bin/env python3
 
+'''
+Streamtest is a simple utility to demonstrate streaming the frames from a tCam-Mini to a canvas real time.
 
+author: bitreaper
+'''
 
-import time
 import base64
+import argparse
 import numpy as np
 from tcam import TCam
 from tkinter import *
@@ -11,6 +16,7 @@ from PIL import Image, ImageTk
 from threading import Event
 
 def convert(img):
+
     dimg = base64.b64decode(img["radiometric"])
     ra = array('H', dimg)
 
@@ -47,12 +53,24 @@ def update():
 ########### Main Program ############
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+
+    parser.prog = "streamtest"
+    parser.description = f"{parser.prog} - an example program to stream images from tCam-mini and display as video\n"
+    parser.usage = "streamtest.py --ip=<ip address of camera>"
+    parser.add_argument("-i", "--ip", help="IP address of the camera")
+
+    args = parser.parse_args()
+
+    if not args.ip:
+        args.ip = "192.168.4.1"
+        print(f"Using default of {args.ip}")
 
     tcam = TCam()
-    tcam.connect('192.168.0.200')
+    tcam.connect(args.ip)
 
     root = Tk()
-    root.title('Video in a Frame')
+    root.title('tCam-Mini Video in a Frame')
     f1 = Frame()
     l1 = Label(f1)
     l1.pack()
@@ -70,12 +88,10 @@ if __name__ == '__main__':
         l1.image = frame_image
 
         ret = tcam.start_stream()
-        print(ret)
 
         update()
 
         root.mainloop()
-        print("After mainloop")
         tcam.shutdown()
 
     except KeyboardInterrupt:
