@@ -88,10 +88,17 @@ class TCamManagerThread(Thread):
                     tcamSocket = self.createSocket()
                     try:
                         tcamSocket.connect((cmd["ipaddress"], cmd["port"]))
+                    except OSError as e:
+                        self.responseQueue.put({"status": "disconnected", "message": f"{e}"})
+                        tcamSocket = None
                     except socket.timeout:
-                        self.responseQueue.put({"status": "timeout"})
+                        self.responseQueue.put({"status": "disconnected", "message": "timeout"})
+                        tcamSocket = None
+                    except ConnectionRefusedError as e:
+                        self.responseQueue.put({"status": "disconnected", "message": f"{e}"})
+                        tcamSocket = None
                     else:
-                       self.responseQueue.put({"status": "connected"})
+                        self.responseQueue.put({"status": "connected"})
                 elif cmdType == "disconnect":
                     tcamSocket.close()
                     tcamSocket = None
