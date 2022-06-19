@@ -31,10 +31,7 @@ from serial import Serial
 from fcntl import ioctl
 from .ioctl_numbers import *
 
-'''
-TODO:
-Cleanup the ioctl code, and reference in it to the original
-'''
+
 
 class TCamManagerThreadBase(Thread, metaclass=abc.ABCMeta):
     """
