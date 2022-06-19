@@ -53,6 +53,12 @@ def _IOR(type, nr, size): return _IOC(_IOC_READ, type, nr, size)
 def _IOW(type, nr, size): return _IOC(_IOC_WRITE, type, nr, size)
 def _IOWR(type, nr, size): return _IOC(_IOC_READ | _IOC_WRITE, type, nr, size)
 
+
+################################################################################
+# This section was influenced from the Lepton.py code from GroupGets.
+# Here: https://github.com/groupgets/pylepton.git
+
+
 SPI_IOC_MAGIC   = ord("k")
 
 SPI_IOC_RD_MODE          = _IOR(SPI_IOC_MAGIC, 1, "=B")
