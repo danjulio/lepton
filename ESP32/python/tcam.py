@@ -21,38 +21,39 @@
 
 import array
 import base64
-import socket
+import abc
 from queue import Queue
 from threading import Thread, Event
 import json
 from json import JSONDecodeError
+import socket
+from serial import Serial
+from fcntl import ioctl
+from .ioctl_numbers import *
 
+'''
+TODO:
+Cleanup the ioctl code, and reference in it to the original
+'''
 
-class TCamManagerThread(Thread):
+class TCamManagerThreadBase(Thread, metaclass=abc.ABCMeta):
     """
-    TCamManagerThread - The background thread that manages the socket communication and the three queues.
+    TCamManagerThreadBase - The background thread that manages the socket communication and the three queues.
 
     Commands come in on the cmdQueue, responses to commands go to the responseQueue, and any frames that
     come from get_image or set_stream_on commands go into frameQueue.
 
-    This thread has a run loop that does 3 things:
-     - Reads the command queue and sends any commands it finds
-     - Reads the socket for any data
-     - Parses responses out of the data
-
-     Instead of a time.sleep() it uses the socket timeout.  This ensures that the socket isn't sitting
-     there with data waiting for the time.sleep() call to return before being read.  If there's no data,
-     the socket times out and we repeat the cycle.  By checking the cmdQueue on every loop iteration, we
-     maintain the ability to be responsive, especially if we are getting a high number of frames while
-     streaming.
-
+    For any time.sleep() calls, we should use the Event object's wait() method, because if we have to we can
+    wake up the code that is sleeping by setting the event with self.event.set().
     """
 
     def __init__(self, cmdQueue, responseQueue, frameQueue, timeout):
         self.cmdQueue = cmdQueue
         self.responseQueue = responseQueue
         self.frameQueue = frameQueue
+        self.internalQueue = Queue()
         self.timeout = timeout
+        self.connected = False
         self.running = False
         self.event = Event()
         super().__init__()
@@ -65,76 +66,54 @@ class TCamManagerThread(Thread):
         self.running = False
         self.event.set()
 
-    def createSocket(self):
-        tmpSock = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
-        tmpSock.settimeout(self.timeout)
-        return tmpSock
-
     def run(self):
         """
         run( )
-        Check cmdQueue for any new commands to send down, read the socket for any response coming back, split
+        Check cmdQueue for any new commands to send down, read the interface for any response coming back, split
         data into responses and deserialize them into python objects from JSON.
         """
-        tcamSocket = None
+        self.interface = None
         scratch = b""
 
         while self.running:
             # The send part of the cycle
             if not self.cmdQueue.empty():
                 cmd = self.cmdQueue.get()
-                cmdType = cmd.get("cmd")
+                cmdType = cmd.get("cmd", None)
                 if cmdType == "connect":
-                    tcamSocket = self.createSocket()
-                    try:
-                        tcamSocket.connect((cmd["ipaddress"], cmd["port"]))
-                    except OSError as e:
-                        self.responseQueue.put({"status": "disconnected", "message": f"{e}"})
-                        tcamSocket = None
-                    except socket.timeout:
-                        self.responseQueue.put({"status": "disconnected", "message": "timeout"})
-                        tcamSocket = None
-                    except ConnectionRefusedError as e:
-                        self.responseQueue.put({"status": "disconnected", "message": f"{e}"})
-                        tcamSocket = None
-                    else:
-                        self.responseQueue.put({"status": "connected"})
+                    self.open_interface(cmd)
                 elif cmdType == "disconnect":
-                    tcamSocket.close()
-                    tcamSocket = None
-                    self.responseQueue.put({"status": "disconnected"})
+                    self.close_interface()
                     continue
-                elif cmdType == "raw":
-                    tcamSocket.send(cmd["payload"])
                 else:
                     # format the string with the start and stop chars, and encode as a byte string before sending
                     buf = f"\x02{json.dumps(cmd)}\x03".encode()
-                    tcamSocket.send(buf)
+                    self.write(buf)
 
             # The recv part of the cycle
-            if tcamSocket:
-                try:
-                    rbuf = tcamSocket.recv(65536)
-                    scratch += rbuf
-                except socket.timeout as e:
-                    pass
-                scratch = self.findResponses(scratch)
+            if self.connected:
+                scratch += self.read()
+                scratch = self.find_responses(scratch)
+
+                # process any items in the internal queue
+                while not self.internalQueue.empty():
+                    msg = self.internalQueue.get()
+                    self.post_process(msg)
             else:
                 # If we're not connected we won't have a socket to timeout on.  Let's use an event to wait on instead.
                 # Why event.wait instead of time.sleep?  Because event.wait can be interrupted unlike time.sleep.
                 self.event.wait(self.timeout)
                 self.event.clear()
 
-    def findResponses(self, buf):
+    def find_responses(self, buf):
         """
-        findResponses()
+        find_responses()
 
-        This is how the manager thread stitches together packets across reads of the socket.  If you are streaming
+        This is how the manager thread stitches together packets across reads of the interface.  If you are streaming
         and you have a high enough frame rate, you may end up with more than one response in your buffer.  You may
         also have one stretched across reads.  This function attempts to extract complete ones and returns the
         remainder to be added to by the next read.
         """
-
         pkts = []
         idx = buf.find(3)
         while idx != -1:
@@ -145,10 +124,7 @@ class TCamManagerThread(Thread):
         for response in pkts:
             try:
                 respObj = json.loads(response.strip(b"\x02\x03").decode())
-                if "radiometric" in respObj:
-                    self.frameQueue.put(respObj)
-                else:
-                    self.responseQueue.put(respObj)
+                self.internalQueue.put(respObj)
             except JSONDecodeError:
                 respObj = {
                     "error": "malformed json payload, json parser threw exception processing it",
@@ -157,31 +133,224 @@ class TCamManagerThread(Thread):
                 self.responseQueue.put(respObj)
         return buf
 
+    @abc.abstractmethod
+    def open_interface(self, cmd):
+        '''
+        open_interface()
+        
+        How the particular type of manager will open it's interface(s).
+        '''
+        pass
 
+    @abc.abstractmethod
+    def close_interface(self):
+        '''
+        close_interface()
+        
+        How the particular type of manager will close it's interface(s)
+        '''
+        pass
+    
+    @abc.abstractmethod
+    def read(self):
+        '''
+        read()
+
+        How the interface(s) will be read.  Allows abstraction from the base code
+        as to how the interfaces need to be read.  Sockets use recv(), serial uses read().
+        '''
+        pass
+    
+    @abc.abstractmethod
+    def write(self):
+        '''
+        write()
+
+        How the interface(s) will be written to.  Allows abstraction from the base code
+        as to how the interfaces need to be written.  Sockets use send(), serial uses write().
+        '''
+        pass
+    
+    @abc.abstractmethod
+    def post_process(self):
+        '''
+        post_process()
+
+        How the messages in the internalQueue will be handled.  This is how the 
+        image frames are put on the frameQueue.
+        '''
+        pass
+    
+    
+class TCamManagerThread(TCamManagerThreadBase):
+    """
+    TCamManagerThread - The background thread that manages the socket communication and the three queues.
+
+    """
+
+    def open_interface(self, cmd):
+        tmpSock = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
+        tmpSock.settimeout(self.timeout)
+        try:
+            tmpSock.connect((cmd["ipaddress"], cmd["port"]))
+        except OSError as e:
+            self.responseQueue.put({"status": "disconnected", "message": f"{e}"})
+            self.tcamSocket = None
+        except socket.timeout:
+            self.responseQueue.put({"status": "disconnected", "message": "timeout"})
+            self.tcamSocket = None
+        except ConnectionRefusedError as e:
+            self.responseQueue.put({"status": "disconnected", "message": f"{e}"})
+            self.tcamSocket = None
+        else:
+            self.responseQueue.put({"status": "connected"})
+        self.tcamSocket = tmpSock
+        self.connected = True
+        return
+
+    def close_interface(self):
+        self.responseQueue.put({"status": "disconnected"})
+        self.tcamSocket.close()
+        self.tcamSocket = None
+        self.connected = False
+
+    def read(self):
+        rbuf = b''
+        try:
+            rbuf = self.tcamSocket.recv(65536)
+        except socket.timeout as e:
+            pass
+        return rbuf
+
+    def write(self, buf):
+        self.tcamSocket.send(buf)
+
+    def post_process(self, msg):
+        if "radiometric" in msg:
+            self.frameQueue.put(msg)
+        else:
+            self.responseQueue.put(msg)
+
+
+################################################################################
+class TCamHwManagerThread(TCamManagerThreadBase):
+    """
+    TCamHwManagerThread - The background thread for the hardware interfaced version of tCam-mini
+    """
+    MODE = SPI_MODE_3  # this comes from ioctl_numbers.py
+    BITS = 8
+
+    def open_interface(self, data):
+        try: 
+            self.serial = Serial(data['serialFile'], baudrate=data['baudrate'], timeout=.1)
+            self.spi = open(data['spiFile'], "rb", buffering=0)
+            ioctl(self.spi, SPI_IOC_WR_MODE, struct.pack("=B", self.MODE))
+            ioctl(self.spi, SPI_IOC_WR_BITS_PER_WORD, struct.pack("=B", self.BITS))
+            ioctl(self.spi, SPI_IOC_WR_MAX_SPEED_HZ, struct.pack("=I", data['spiSpeed']))
+        except Exception as e:
+            self.responseQueue.put({"status": "disconnected", "message": f"{e}"})
+            self.connected = False
+            return
+        self.connected = True
+        self.responseQueue.put({"status": "connected"})
+
+        
+    def close_interface(self):
+        self.serial.close()
+        self.serial = None
+        self.spi.close()
+        self.spi = None
+        self.connected = False
+        self.responseQueue.put({"status": "disconnected"})
+
+        
+    def read(self):
+        return self.serial.read(256)
+    
+
+    def write(self, buf):
+        self.serial.write(buf)
+        self.event.wait(.1)
+
+        
+    def post_process(self, msg):
+        if "image_ready" in msg:
+            self.frameQueue.put(self.get_spi_frame(msg['image_ready']))
+        else:
+            self.responseQueue.put(msg)
+
+            
+    def get_spi_frame(self, frameLength):
+        frame = self.spi.read(frameLength)
+        cs = int.from_bytes(frame[-4:], 'big')
+        sum = 0
+        for i in frame[:-4]:
+            sum += i
+        if sum != cs:
+            # if a bogus frame comes in, since this is a thread and not the main thread, we need
+            # to signal that it was bad, but we also want to put the bogus data on the frameQueue
+            # so that we can debug what happened.
+            self.responseQueue.put({"status": f"Bad frame! Sums don't match: Frame:{cs} Calc:{sum}"})
+            return frame
+        frameObj = json.loads(frame[1:-5].decode())
+        return frameObj
+
+
+
+################################################################################
 class TCam:
     """
     TCam - Interface object for managing a tCam device.
     """
 
-    def __init__(self, timeout=1, responseTimeout=10):
+    def __init__(self, timeout=1, responseTimeout=10, is_hw=False):
         self.frameQueue = Queue()
         self.cmdQueue = Queue()
         self.responseQueue = Queue()
         self.responseTimeout = responseTimeout
         self.timeout = timeout
-        self.managerThread = TCamManagerThread(
-            responseQueue=self.responseQueue,
-            cmdQueue=self.cmdQueue,
-            frameQueue=self.frameQueue,
-            timeout=self.timeout,
-        )
-        self.managerThread.start()
+        self.is_hw = is_hw
 
-    def connect(self, ipaddress="192.168.4.1", port=5001):
+        if is_hw:
+            self.managerThread = TCamHwManagerThread(
+                responseQueue=self.responseQueue,
+                cmdQueue=self.cmdQueue,
+                frameQueue=self.frameQueue,
+                timeout=self.timeout,
+            )
+        else:
+            self.managerThread = TCamManagerThread(
+                responseQueue=self.responseQueue,
+                cmdQueue=self.cmdQueue,
+                frameQueue=self.frameQueue,
+                timeout=self.timeout,
+            )
+
+        self.managerThread.start()
+        
+
+    def connect(self, ipaddress="192.168.4.1", port=5001,
+                spiFile='/dev/spidev0.0',
+                serialFile='/dev/serial0',
+                baudrate=230400,
+                serialTimeout=.01,
+                spiSpeed=7000000
+                ):
         """
         connect()
         """
-        cmd = {"cmd": "connect", "ipaddress": ipaddress, "port": port}
+        if self.is_hw:
+            cmd = {"cmd": "connect",
+                   "spiFile": spiFile,
+                   "serialFile": serialFile,
+                   "baudrate": baudrate,
+                   "timeout": serialTimeout,
+                   "spiSpeed": spiSpeed,
+                   }
+        else:
+            cmd = {"cmd": "connect", "ipaddress": ipaddress, "port": port}
+
+
         self.cmdQueue.put(cmd)
         return self.responseQueue.get(block=True, timeout=self.responseTimeout)
 
@@ -225,6 +394,9 @@ class TCam:
         return self.responseQueue.get(block=True, timeout=timeout)
 
     def get_image(self, timeout=None):
+        """get_image()
+        Used for when you are needing only one frame.
+        """
         cmd = {"cmd": "get_image"}
         self.cmdQueue.put(cmd)
         if not timeout:
@@ -232,12 +404,20 @@ class TCam:
         return self.frameQueue.get(block=True, timeout=timeout)
 
     def get_frame(self):
+        """
+        get_frame()
+        Used for when you need to pull frames from the frameQueue, usually when you are streaming.
+        """
         if not self.frameQueue.empty():
             return self.frameQueue.get()
         else:
             return None
 
     def frame_count(self):
+        """
+        frame_count()
+        Returns number of pending frames waiting in the queue
+        """
         return self.frameQueue.qsize()
 
     def run_ffc(self, timeout=None):
