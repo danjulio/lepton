@@ -93,17 +93,17 @@ The hardware interface is enabled when the Mode input is low (grounded) when tCa
 
 The serial port (running at 230,400 baud) is used to send and receive commands and responses as described below.  Instead of sending an "image" response over the relatively slow serial port, the firmware sends an "image_ready" response to notify software running on the external system that it can read the image from the slave SPI port using a master SPI peripheral.
 
-The slave SPI port is partially handled by a driver running on the ESP32.  For this reason the highest supported clock rate is 8 MHz.  Too fast and the ESP32 slave SPI driver can't keep up.  I found success running the interface around 7 MHz.
+The slave SPI port is partially handled by a driver running on the ESP32.  For this reason the highest supported clock rate is 8 MHz.  Too fast and the ESP32 slave SPI driver can't keep up.  I found success running the interface at 7 MHz.
 
 
 ### Command Interface
 The camera is capable of executing a set of commands and generating responses or sending image data when connected to a remote computer via one of the interfaces.  It can support one remote connection at a time.  Commands and responses are encoded as json-structured strings.  The command interface exists as a TCP/IP socket at port 5001 when using WiFi.
 
-Each json command or response is delimited by two characters.  A start delimiter (value 0x02) precedes the json string.  A end delimiter (value 0x03) follows the json string.  The json string may be tightly packed or may contain white space.  However no command may exceed 256 bytes in length.
+Each json command or response is delimited by two characters.  A Start delimiter (value 0x02) precedes the json string.  An End delimiter (value 0x03) follows the json string.  The json string may be tightly packed or may contain white space.
 
 ```<0x02><json string><0x03>```
 
-The camera currently supports the following commands.  The communicating application should wait for a response from commands that generate one before issuing subsequent commands (although the camera does have some buffering - 1024 bytes - for multiple commands).
+The camera currently supports the following commands.  The communicating application should wait for a response from commands that generate one before issuing subsequent commands (although the camera command buffer is 12,288 bytes (sized for the ```fw_segment``` command) and can support multiple short commands).
 
 | Command | Description |
 | --- | --- |
@@ -115,11 +115,11 @@ The camera currently supports the following commands.  The communicating applica
 | run_ffc | Initiates a Lepton Flat Field Correction. |
 | set_config | Set the camera's settings. |
 | set\_lep_cci | Writes specified data to the Lepton's CCI interface. |
-| set_spotmeter | Set the spotmeter location in the Lepton.  Does  not return anything. |
-| set\_stream_on | Starts the camera streaming images and sets the interval between images and an optional number of images to stream.  Does not return anything but the camera will start generating image responses. |
+| set_spotmeter | Set the spotmeter location in the Lepton. |
+| set\_stream_on | Starts the camera streaming images and sets the interval between images and an optional number of images to stream. |
 | set\_stream_off | Stops the camera from streaming images. |
 | get_wifi | Returns a packet with the camera's current WiFi and Network configuration. |
-| set_wifi | Set the camera's WiFi and Network configuration.  The WiFi subsystem is immediately restarted.  The application should immediately close its socket after sending this command.  Does not return anything. |
+| set_wifi | Set the camera's WiFi and Network configuration.  The WiFi subsystem is immediately restarted.  The application should immediately close its socket after sending this command. |
 | fw\_update_request | Informs the camera of a OTA FW update size and revision and starts it blinking the LED alternating between red and green to signal to the user a OTA FW update has been requested. |
 | fw\_segment | Sends a sequential chunk of the new FW during an OTA FW update. |
 
@@ -194,16 +194,16 @@ The get_status response may include additional information for other camera mode
 | --- | --- |
 | metadata | Camera status information at the time the image was acquired. |
 | radiometric | Base64 encoded Lepton pixel data (19,200 16-bit words / 38,400 bytes).  Each pixel contains a 16-bit absolute (Kelvin) temperature value when the Lepton is operating in Radiometric output mode.  The Lepton's gain mode specifies the resolution (0.01 K in High gain, 0.1 K in Low gain). Each pixel contains an 8-bit value when the Lepton has AGC enabled. |
-| telemetry | Base64 encoded Lepton telemetry data (240 16-bit words / 480 bytes).  See the Lepton Datasheet for a description of the telemetry contents. |
+| telemetry | Base64 encoded Lepton telemetry data (240 16-bit words / 480 bytes).  See below for some important telemetry words and the Lepton Datasheet for a full description of the telemetry contents. |
 
 #### [Hardware Interface only] image_ready response (or initiated periodically while streaming)
 ```{"image_ready": 51980}```
 
-The ```image_ready``` response indicates that an image is available to read from the slave SPI interface.  The value indicates the number of bytes to read. It will always be a multiple of 4 bytes.  The image must be read from the slave SPI interface before another image will be sent (the camera's response process hangs until the image is read).
+The ```image_ready``` response indicates that an image is available to read from the slave SPI interface.  The value indicates the number of bytes in the image, including the start and end delimiters. It is followed by a 4 byte checksum and 0-3 dummy bytes.  The dummy bytes may be necessary since the SPI read length must be a multiple of 4 bytes.  The SPI read must be a single operation and the image must be read from the slave SPI interface before another image will be sent.  For FW 2.0 and 2.1, the camera's response process hangs until the image is read.  Subsequent firmware releases timeout and discard the image after one second.
 
-The image data is the ```get_image response``` data described above, followed by 4 checksum bytes, followed by 0-3 dummy bytes necessary to round the total size to a multiple of 4 bytes.
+![SPI Data layout](pictures/hw_if_spi_data.png)
 
-The checksum is simply the 32-bit sum of all ```get_image response``` bytes with the high byte first.  It is used to validate that the SPI transfer successfully sent all bytes.  On occasion the ESP32 slave SPI driver may fail to keep up and the checksum can be used to discard corrupt images.
+The checksum is simply the 32-bit sum of all ```image_ready``` response bytes with the high byte first.  It is used to validate that the SPI transfer successfully sent all bytes.  On occasion the ESP32 slave SPI driver may fail to keep up and the checksum is used to discard corrupt images.
 
 #### get\_lep_cci
 ```
@@ -319,6 +319,8 @@ Individual args values may be left out.  The camera will use the existing value.
 | emissivity | Lepton Emissivity: 1 - 100 (integer percent) |
 | gain_mode | Lepton Gain Mode: 0: High, 1: Low, 2: Auto |
 
+```set_config``` items are stored in non-volatile flash memory for cameras operating with WiFi enabled, allowing them to persist across power cycles.  They are not stored in non-volatile memory for cameras operating with the Hardware Interface enabled and only persist until power is removed.  It is assumed the host device will configure the desired items during an initialization sequence.
+
 #### set\_lep_cci
 ```
 {
@@ -393,6 +395,8 @@ Column c1 should be less than or equal to c2.  Row r1 should be less than or equ
 | --- | --- |
 | delay_msec | Delay between images.  Set to 0 for fastest possible rate.  Set to a number greater than 250 to specify the delay between images in mSec. |
 | num_frames | Number of frames to send before ending the stream session.  Set to 0 for no limit (set\_stream_off must be send to end streaming). |
+
+Streaming is a slightly special case for the command interface.  Responses are typically generated after receiving the associated get command.  However the image response is generated repeatedly by the camera after streaming has been enabled at the rate, and for the number of times, specified in the set\_stream\_on command.
 
 #### set\_stream_off
 ```{"cmd":"stream_off"}```
@@ -558,13 +562,6 @@ Generated in response to a ```get_fw``` request.  Must always use the arguments 
 | start | Starting byte of current chunk. |
 | length | Length of chunk in bytes. |
 | data | Base64 encoded binary data chunk. |
-
-#### Streaming (and a performance note)
-Streaming is a slightly special case for the command interface.  Responses are only generated after receiving the associated get command.  However the image response is generated repeatedly by the camera after streaming has been enabled at the rate, and for the number of times, specified in the set\_stream\_on command.
-
-While the task that services the Lepton is capable of getting the maximum 8.7 fps frame-rate out of the sensor, the task generating the image response and sending it through the ESP32's network and Wifi stacks may not always keep up.  It appears that the time required to send the data over the ESP32's Wifi interface varies depending on a several factors.
-
-Typical streaming rates vary from about 6-9 fps.  The fps display on the desktop application will dip every time the Lepton performs a FFC because it is averaging over several seconds and the camera stops sending images during the FFC (about 1.5 seconds).
  
 ### OTA FW Update Process
 The OTA FW update process consists of several steps.  The FW is contained in the binary file ```tCamMini.bin``` in the precompiled FW directory or built using the Espressif IDF.  No other binary files are required.
@@ -576,20 +573,49 @@ The OTA FW update process consists of several steps.  The FW is contained in the
 5. Steps 3 and 4 are repeated until the entire firmware binary file has been transferred.
 6. The camera validates the binary file and sends a ```cam\_info``` indicating if the update is successful or has failed.  If successful the camera then reboots into the new firmware.
 
+### Important Telemetry Locations
+
+| Offset | 16-bit Word Description |
+| --- | --- |
+| 3 | Status Low (see below) |
+| 4 | Status High |
+| 99 | Emissivity (scaled by 8192) |
+| 208 | TLinear Enabled Flag - 0 = disabled, 1 = enabled |
+| 209 | TLinear Resolution Flag - 0 = 0.1, 1 = 0.01 |
+| 210 | Spot Meter Mean - 16-bit radiometric value |
+| 214 | Spot Meter Y1 coordinate |
+| 215 | Spot Meter X1 coordinate |
+| 216 | Spot Meter Y2 coordinate |
+| 217 | Spot Meter X2 coordinate |
+
+
+| Bit | Status Bit Description |
+| --- | --- |
+| 20 | Over Temperature Shut Down imminent (shutdown in 10 seconds) |
+| 15 | Shutter Lockout - 0 = not locked out, 1 = locked out (outside of valid operating temperature range -10°C to 80°C) |
+| 12 | AGC State - 0 = disabled, 1 = enabled |
+| 5:4 | FFC State - 0 = Not commanded, 1 = Imminent, 2 = Running, 3 = Complete |
+| 3 | FFC Desired |
+
+#### Using telemetry data
+
+The Status AGC State bit indicates the form of the pixel data.  When AGC is enabled the lepton performs a histogram analysis of the data and the pixel data is 8-bits (low byte of each 16-bit word) designed to directly index a palette array for display.  When AGC is disabled the lepton outputs 16-bit radiometric data in each pixel.  This data represents the actual temperature of each pixel in degrees Kelvin scaled by either 10 (TLinear Resolution Flag = 0) or 100 (TLinear Resolution Flag = 1).  The TLinear Resolution Flag indicates the gain mode of the Lepton (0 = Low Gain, 1 = High Gain).
+
+The radiometric pixel temperature in °C may be computed using the following formula where TLinear resolution is 0.1 if TLinear Resolution Flag is 0 and 0.01 if TLinear Resolution Flag is 1.
+
+``` TempC = Pixel[15:0] * TLinear_resolution - 273.15```
+
+The Spot Meter average temperature value is computed using the same formula, substituting the Spot Meter Mean for pixel data, and is valid independent of AGC enabled or disabled.  The Spot Meter is the average value of the pixels in the box defined by the Spot Meter (X1, Y1) and (X2, Y2) coordinates.
+
+The FFC State may be used to identify when the lepton is preparing to perform a FFC (flat field correction) and is performing a FFC.  While performing a FFC the lepton closes the shutter in front of the sensor array.  Image data is not available while a FFC is being performed.
+
 ### Previous version
 ![tCam-Mini Front and Back](pictures/tcam_mini_pcb_r2.png)
 
-### Prototype
-My first tCam-Mini was built using a Sparkfun ESP32 Thing+ and a Lepton Breakout board from Group Gets.  I added an external PSRAM for more buffer space and a red/green LED (with current limiting resistors).  The GPIO0 button is the WiFi Reset Button.
-
-![tCam-Mini Prototype](pictures/tcam_mini_prototype.png)
-
-A hand-drawn schematic can be found in the pictures directory here (tcam\_mini\_proto\_schem.pdf) if you'd like to try to build one without the hassle of making a PCB and soldering SMT parts.  
-
 ### Building with dev boards
-I found the [TTGO T7 V1.4](http://www.lilygo.cn/prod_view.aspx?TypeId=50033&Id=978&FId=t3:50033:3) ESP32 WROVER based development board long after I started this project but it's a good way, along with a [Lepton Breakout](https://store.groupgets.com/products/purethermal-breakout-board) from Group Gets, to even more easily build a tCam-Mini without having to make and load a PCB.  The PSRAM is already part of the WROVER module simplifying the build considerably.
+A board like the [TTGO T7 V1.4](http://www.lilygo.cn/prod_view.aspx?TypeId=50033&Id=978&FId=t3:50033:3) ESP32 WROVER based development board is a way, along with a [Lepton Breakout](https://store.groupgets.com/products/purethermal-breakout-board) from Group Gets, to hand build a tCam-Mini.
 
-You can use other ESP32 development boards, just make sure they have a 4 or 8 MB PSRAM (WROVER-based).
+You can use other ESP32 development boards, just make sure they have a PSRAM chip built-in (WROVER-based).
 
 ![ttgo based design](pictures/ttgo_version_side.png)
 
@@ -600,7 +626,7 @@ You'll also need the following components.
 * A small tactile push button.
 * A dual Red-Green common-cathode LED (I use a Lite-On LTL1BEKVJNN).
 * Two 180-330 ohm resistors, 1/8 - 1/4 watt.
-* Optional electrolytic capacitor.  This should only be necessary if there is a voltage drop when the Lepton performs a FFC causing it to malfunction.
+* Optional electrolytic capacitor.  This should only be necessary if there is a voltage drop when the Lepton performs a FFC causing it to malfunction due to inductance in the hand wiring.
 
 The components are wired together as shown below.
 
@@ -622,7 +648,9 @@ The components are wired together as shown below.
 | 22 | Lepton I2C SCL |
 | 23 | Lepton I2C SDA |
 
-#### ESP Revision Note
-The modules I buy from Mouser and that Group Gets sources for the PCB design include a Rev 3 ESP32 chip and I compile for that version.  I found that the TTGO module had a Rev 1 ESP32 chip so I also recompiled the project for Rev 1.  The binary files for that revision can also be found in the firmware/precompiled subdirectory.  The camera won't boot if you use the wrong chip revision.
+#### ESP Revision / Module Notes
+The modules I buy from Mouser and that Group Gets sources for the PCB design include a Rev 3 ESP32 chip and I compile for that version.  Some dev boards may include a module with a Rev 1 ESP32.  For these modules you must use the version 1.6 firmware.  Modules with a Rev 3 ESP32 may use the latest firmware.  The binary files for each revision can be found in the firmware/precompiled subdirectory.  The camera won't boot if you use the wrong chip revision.
 
-The PCB versions have 8 MB Flash modules (64 MBit) but the TTGO module is 4 MB (32 MBit).  Be sure to properly configure the flash size in the programmer to match your module or the firmware will fail to boot.  This is explained in the programming sub-directory readme.
+The PCB versions have 8 MB Flash modules (64 MBit) but the TTGO module is typically 4 MB (32 MBit).  Be sure to properly configure the flash size in the programmer to match your module or the firmware will fail to boot.  This is explained in the programming sub-directory readme.
+
+To enable OTA updates the module must have at least 8 MB of Flash memory.  Modules with 4 MB of Flash can be programmed using the Espressif download tool but cannot be updated using OTA transfers.
