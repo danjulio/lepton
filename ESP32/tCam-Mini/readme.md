@@ -116,8 +116,8 @@ The camera currently supports the following commands.  The communicating applica
 | set_config | Set the camera's settings. |
 | set\_lep_cci | Writes specified data to the Lepton's CCI interface. |
 | set_spotmeter | Set the spotmeter location in the Lepton. |
-| set\_stream_on | Starts the camera streaming images and sets the interval between images and an optional number of images to stream. |
-| set\_stream_off | Stops the camera from streaming images. |
+| stream\_on | Starts the camera streaming images and sets the interval between images and an optional number of images to stream. |
+| sstream\_off | Stops the camera from streaming images. |
 | get_wifi | Returns a packet with the camera's current WiFi and Network configuration. |
 | set_wifi | Set the camera's WiFi and Network configuration.  The WiFi subsystem is immediately restarted.  The application should immediately close its socket after sending this command. |
 | fw\_update_request | Informs the camera of a OTA FW update size and revision and starts it blinking the LED alternating between red and green to signal to the user a OTA FW update has been requested. |
@@ -380,7 +380,7 @@ Note: It is possible to crash the Lepton or camera using the CCI interface.
 
 Column c1 should be less than or equal to c2.  Row r1 should be less than or equal to r2.  All four argument values must be specified.  They specify the box of pixels the Lepton uses to calculate the spotmeter temperature (which is contained in the image telemetry).
 
-#### set\_stream_on
+#### stream\_on
 ```
 {
 	"cmd":"stream_on",
@@ -391,14 +391,14 @@ Column c1 should be less than or equal to c2.  Row r1 should be less than or equ
 }
 ```
 
-| set\_stream_on argument | Description |
+| stream\_on argument | Description |
 | --- | --- |
 | delay_msec | Delay between images.  Set to 0 for fastest possible rate.  Set to a number greater than 250 to specify the delay between images in mSec. |
 | num_frames | Number of frames to send before ending the stream session.  Set to 0 for no limit (set\_stream_off must be send to end streaming). |
 
 Streaming is a slightly special case for the command interface.  Responses are typically generated after receiving the associated get command.  However the image response is generated repeatedly by the camera after streaming has been enabled at the rate, and for the number of times, specified in the set\_stream\_on command.
 
-#### set\_stream_off
+#### stream\_off
 ```{"cmd":"stream_off"}```
 
 #### get_wifi
