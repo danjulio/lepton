@@ -18,19 +18,19 @@
   You should have received a copy of the GNU General Public License
   along with tCam.  If not, see <https://www.gnu.org/licenses/>.
 """
-
+import os
+import sys
+import abc
+import json
 import array
 import base64
-import abc
-from queue import Queue
-from threading import Thread, Event
-import json
-from json import JSONDecodeError
 import socket
-from serial import Serial
-from fcntl import ioctl
-from .ioctl_numbers import *
+from queue import Queue
+from json import JSONDecodeError
+from threading import Thread, Event
 
+from fcntl import ioctl
+from ioctl_numbers import *
 
 
 class TCamManagerThreadBase(Thread, metaclass=abc.ABCMeta):
@@ -237,9 +237,14 @@ class TCamHwManagerThread(TCamManagerThreadBase):
     MODE = SPI_MODE_3  # this comes from ioctl_numbers.py
     BITS = 8
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from serial import Serial
+        self.SerialClass = Serial
+
     def open_interface(self, data):
         try: 
-            self.serial = Serial(data['serialFile'], baudrate=data['baudrate'], timeout=.1)
+            self.serial = self.SerialClass(data['serialFile'], baudrate=data['baudrate'], timeout=.1)
             self.spi = open(data['spiFile'], "rb", buffering=0)
             ioctl(self.spi, SPI_IOC_WR_MODE, struct.pack("=B", self.MODE))
             ioctl(self.spi, SPI_IOC_WR_BITS_PER_WORD, struct.pack("=B", self.BITS))
@@ -266,8 +271,11 @@ class TCamHwManagerThread(TCamManagerThreadBase):
     
 
     def write(self, buf):
-        self.serial.write(buf)
-        self.event.wait(.1)
+        if not self.serial:
+            print("Please call connect() first, refusing to write to empty interface.")
+        else:
+            self.serial.write(buf)
+            self.event.wait(.1)
 
         
     def post_process(self, msg):
@@ -309,6 +317,7 @@ class TCam:
         self.is_hw = is_hw
 
         if is_hw:
+            self.hwChecks()
             self.managerThread = TCamHwManagerThread(
                 responseQueue=self.responseQueue,
                 cmdQueue=self.cmdQueue,
@@ -326,6 +335,20 @@ class TCam:
         self.managerThread.start()
         
 
+    def hwChecks(self):
+        try:
+            from serial import Serial
+        except ImportError as e:
+            print("Attempting to use hardware interface without the pyserial module installed!")
+            sys.exit(-42)
+        if not os.path.exists('/dev/spidev0.0') or not os.path.exists('/dev/spidev0.1'):
+            print("Do you have SPI turned on?  Didn't find the SPI device files in /dev")
+            sys.exit(-43)
+        if not os.path.exists('/dev/serial0'):
+            print("Do you have the UART turned on?  Didn't find the serial device file in /dev")
+            sys.exit(-44)
+            
+            
     def connect(self, ipaddress="192.168.4.1", port=5001,
                 spiFile='/dev/spidev0.0',
                 serialFile='/dev/serial0',
