@@ -347,7 +347,12 @@ class TCam:
         if not os.path.exists('/dev/serial0'):
             print("Do you have the UART turned on?  Didn't find the serial device file in /dev")
             sys.exit(-44)
-            
+        with open('/proc/cmdline', 'r') as f:
+            cmdline = f.read()
+            if 'spidev.bufsiz=65536' not in cmdline:
+                print(f"You will need to add 'spidev.bufsiz=65536' to the kernel cmdline in /boot/cmdline.txt")
+                sys.exit(-45)
+                
             
     def connect(self, ipaddress="192.168.4.1", port=5001,
                 spiFile='/dev/spidev0.0',
