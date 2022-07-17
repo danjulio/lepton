@@ -207,7 +207,9 @@ class TCamManagerThread(TCamManagerThreadBase):
 
     def close_interface(self):
         self.responseQueue.put({"status": "disconnected"})
-        self.tcamSocket.close()
+        if hasattr(self, 'tcamSocket'):
+            # handle the case of a shutdown before it gets used, otherwise this becomes an execption in a background thread.
+            self.tcamSocket.close()
         self.tcamSocket = None
         self.connected = False
 
@@ -220,7 +222,11 @@ class TCamManagerThread(TCamManagerThreadBase):
         return rbuf
 
     def write(self, buf):
-        self.tcamSocket.send(buf)
+        if not hasattr(self, 'tcamSocket'):
+            self.responseQueue.put({"status": "disconnected", "msg":"Please call connect() first, refusing to write to empty interface."})
+            self.frameQueue.put({"status": "disconnected", "msg":"Please call connect() first, refusing to write to empty interface."})
+        else:
+            self.tcamSocket.send(buf)
 
     def post_process(self, msg):
         if "radiometric" in msg:
@@ -258,9 +264,11 @@ class TCamHwManagerThread(TCamManagerThreadBase):
 
         
     def close_interface(self):
-        self.serial.close()
+        if hasattr(self, 'serial'):
+            # handle the case of a shutdown before it gets used, otherwise this becomes an execption in a background thread.
+            self.serial.close()
+            self.spi.close()
         self.serial = None
-        self.spi.close()
         self.spi = None
         self.connected = False
         self.responseQueue.put({"status": "disconnected"})
@@ -271,8 +279,9 @@ class TCamHwManagerThread(TCamManagerThreadBase):
     
 
     def write(self, buf):
-        if not self.serial:
-            print("Please call connect() first, refusing to write to empty interface.")
+        if not hasattr(self, 'serial'):
+            self.responseQueue.put({"status": "disconnected", "msg":"Please call connect() first, refusing to write to empty interface."})
+            self.frameQueue.put({"status": "disconnected", "msg":"Please call connect() first, refusing to write to empty interface."})
         else:
             self.serial.write(buf)
             self.event.wait(.1)
