@@ -12,8 +12,7 @@ parser = argparse.ArgumentParser()
 
 parser.prog = "dump_image"
 parser.description = f"{parser.prog} - an example program to dump data from tCam-mini and process it into an image\n"
-parser.usage = "dump_image.py --ip=<ip address of camera> [-o output file name]"
-parser.add_argument("-i", "--ip", help="IP address of the camera")
+parser.usage = "dump_image.py [-o output file name]"
 parser.add_argument("-o", "--out", help="Path and name of the output file")
 
 
@@ -21,17 +20,13 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    if not args.ip:
-        print("An IP address of the tCam is necessary.")
-        sys.exit(-1)
-
     if not args.out:
         outfile = "tcam_dump.png"
     else:
         outfile = args.out
 
-    camera = TCam()
-    camera.connect(args.ip)
+    camera = TCam(is_hw=True)
+    camera.connect()
 
     img = camera.get_image()
     dimg = base64.b64decode(img["radiometric"])

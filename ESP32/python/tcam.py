@@ -18,19 +18,19 @@
   You should have received a copy of the GNU General Public License
   along with tCam.  If not, see <https://www.gnu.org/licenses/>.
 """
-
+import os
+import sys
+import abc
+import json
 import array
 import base64
-import abc
-from queue import Queue
-from threading import Thread, Event
-import json
-from json import JSONDecodeError
 import socket
-from serial import Serial
-from fcntl import ioctl
-from .ioctl_numbers import *
+from queue import Queue
+from json import JSONDecodeError
+from threading import Thread, Event
 
+from fcntl import ioctl
+from ioctl_numbers import *
 
 
 class TCamManagerThreadBase(Thread, metaclass=abc.ABCMeta):
@@ -207,7 +207,9 @@ class TCamManagerThread(TCamManagerThreadBase):
 
     def close_interface(self):
         self.responseQueue.put({"status": "disconnected"})
-        self.tcamSocket.close()
+        if hasattr(self, 'tcamSocket'):
+            # handle the case of a shutdown before it gets used, otherwise this becomes an execption in a background thread.
+            self.tcamSocket.close()
         self.tcamSocket = None
         self.connected = False
 
@@ -220,7 +222,11 @@ class TCamManagerThread(TCamManagerThreadBase):
         return rbuf
 
     def write(self, buf):
-        self.tcamSocket.send(buf)
+        if not hasattr(self, 'tcamSocket'):
+            self.responseQueue.put({"status": "disconnected", "msg":"Please call connect() first, refusing to write to empty interface."})
+            self.frameQueue.put({"status": "disconnected", "msg":"Please call connect() first, refusing to write to empty interface."})
+        else:
+            self.tcamSocket.send(buf)
 
     def post_process(self, msg):
         if "radiometric" in msg:
@@ -237,9 +243,14 @@ class TCamHwManagerThread(TCamManagerThreadBase):
     MODE = SPI_MODE_3  # this comes from ioctl_numbers.py
     BITS = 8
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from serial import Serial
+        self.SerialClass = Serial
+
     def open_interface(self, data):
         try: 
-            self.serial = Serial(data['serialFile'], baudrate=data['baudrate'], timeout=.1)
+            self.serial = self.SerialClass(data['serialFile'], baudrate=data['baudrate'], timeout=.1)
             self.spi = open(data['spiFile'], "rb", buffering=0)
             ioctl(self.spi, SPI_IOC_WR_MODE, struct.pack("=B", self.MODE))
             ioctl(self.spi, SPI_IOC_WR_BITS_PER_WORD, struct.pack("=B", self.BITS))
@@ -253,9 +264,11 @@ class TCamHwManagerThread(TCamManagerThreadBase):
 
         
     def close_interface(self):
-        self.serial.close()
+        if hasattr(self, 'serial'):
+            # handle the case of a shutdown before it gets used, otherwise this becomes an execption in a background thread.
+            self.serial.close()
+            self.spi.close()
         self.serial = None
-        self.spi.close()
         self.spi = None
         self.connected = False
         self.responseQueue.put({"status": "disconnected"})
@@ -266,8 +279,12 @@ class TCamHwManagerThread(TCamManagerThreadBase):
     
 
     def write(self, buf):
-        self.serial.write(buf)
-        self.event.wait(.1)
+        if not hasattr(self, 'serial'):
+            self.responseQueue.put({"status": "disconnected", "msg":"Please call connect() first, refusing to write to empty interface."})
+            self.frameQueue.put({"status": "disconnected", "msg":"Please call connect() first, refusing to write to empty interface."})
+        else:
+            self.serial.write(buf)
+            self.event.wait(.1)
 
         
     def post_process(self, msg):
@@ -309,6 +326,7 @@ class TCam:
         self.is_hw = is_hw
 
         if is_hw:
+            self.hwChecks()
             self.managerThread = TCamHwManagerThread(
                 responseQueue=self.responseQueue,
                 cmdQueue=self.cmdQueue,
@@ -326,6 +344,25 @@ class TCam:
         self.managerThread.start()
         
 
+    def hwChecks(self):
+        try:
+            from serial import Serial
+        except ImportError as e:
+            print("Attempting to use hardware interface without the pyserial module installed!")
+            sys.exit(-42)
+        if not os.path.exists('/dev/spidev0.0') or not os.path.exists('/dev/spidev0.1'):
+            print("Do you have SPI turned on?  Didn't find the SPI device files in /dev")
+            sys.exit(-43)
+        if not os.path.exists('/dev/serial0'):
+            print("Do you have the UART turned on?  Didn't find the serial device file in /dev")
+            sys.exit(-44)
+        with open('/proc/cmdline', 'r') as f:
+            cmdline = f.read()
+            if 'spidev.bufsiz=65536' not in cmdline:
+                print(f"You will need to add 'spidev.bufsiz=65536' to the kernel cmdline in /boot/cmdline.txt")
+                sys.exit(-45)
+                
+            
     def connect(self, ipaddress="192.168.4.1", port=5001,
                 spiFile='/dev/spidev0.0',
                 serialFile='/dev/serial0',
