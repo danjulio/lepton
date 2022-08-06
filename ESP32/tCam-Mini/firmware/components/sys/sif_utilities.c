@@ -4,7 +4,7 @@
  * Provides access to the serial interface for serial mode communications.  Designed
  * to be polled.
  *
- * Copyright 2020-2021 Dan Julio
+ * Copyright 2020-2022 Dan Julio
  *
  * This file is part of tCam.
  *
@@ -44,7 +44,7 @@ void sif_init()
         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE
     };
     uart_param_config(UART_NUM_1, &uart_config);
-    uart_set_pin(UART_NUM_1, SIF_TX_IO, SIF_RX_IO, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+    uart_set_pin(UART_NUM_1, BRD_W_SIF_TX_IO, BRD_W_SIF_RX_IO, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
     uart_driver_install(UART_NUM_1, SIF_RX_BUFFER_SIZE, SIF_TX_BUFFER_SIZE, 0, NULL, 0);
 }
 

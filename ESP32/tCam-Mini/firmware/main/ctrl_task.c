@@ -1,13 +1,13 @@
 /*
  * Control Interface Task
  *
- * Determine communication mode (WiFi or Serial)
+ * Determine communication mode (Ethernet/WiFi or Serial)
  *
  * Manage user controls:
- *   WiFi Reset Button
+ *   Ethernet/WiFi Reset Button
  *   Red/Green Dual Status LED
  *
- * Copyright 2020-2021 Dan Julio
+ * Copyright 2020-2022 Dan Julio
  *
  * This file is part of tCam.
  *
@@ -26,18 +26,18 @@
  *
  */
 #include <stdbool.h>
-#include "wifi_cmd_task.h"
 #include "ctrl_task.h"
+#include "net_cmd_task.h"
 #include "rsp_task.h"
 #include "esp_system.h"
 #include "esp_log.h"
 #include "driver/gpio.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "net_utilities.h"
 #include "ps_utilities.h"
 #include "system_config.h"
 #include "sys_utilities.h"
-#include "wifi_utilities.h"
 
 
 
@@ -67,8 +67,8 @@
 
 // Control State Machine states
 #define CTRL_ST_STARTUP            0
-#define CTRL_ST_WIFI_NOT_CONNECTED 1
-#define CTRL_ST_WIFI_CONNECTED     2
+#define CTRL_ST_NET_NOT_CONNECTED  1
+#define CTRL_ST_NET_CONNECTED      2
 #define CTRL_ST_CLIENT_CONNECTED   3
 #define CTRL_ST_RESET_ALERT        4
 #define CTRL_ST_RESET_ACTION       5
@@ -82,8 +82,14 @@
 //
 static const char* TAG = "ctrl_task";
 
+// Board/IO related
+static int ctrl_brd_type;
+static int ctrl_if_mode;
+static int ctrl_pin_btn;
+static int ctrl_pin_r_led;
+static int ctrl_pin_g_led;
+
 // State
-static bool ctrl_ser_mode;
 static int ctrl_state;
 static int ctrl_pre_activity_state;
 static int ctrl_led_state;
@@ -125,10 +131,10 @@ void ctrl_task()
 	}
 }
 
-
-bool ctrl_get_ser_mode()
+void ctrl_get_if_mode(int* brd, int* iface)
 {
-	return ctrl_ser_mode;
+	*brd = ctrl_brd_type;
+	*iface = ctrl_if_mode;
 }
 
 
@@ -158,24 +164,58 @@ void ctrl_set_fault_type(int f)
 //
 static void ctrl_task_init()
 {
-	// First, determine the operating mode
-	gpio_reset_pin(MODE_SENSE_IO);
-	gpio_set_direction(MODE_SENSE_IO, GPIO_MODE_INPUT);
-	gpio_set_pull_mode(MODE_SENSE_IO, GPIO_PULLUP_ONLY);
-	ctrl_ser_mode = gpio_get_level(MODE_SENSE_IO) == 0;
+	// First determine the board type
+	gpio_reset_pin(BOARD_SENSE_IO);
+	gpio_set_direction(BOARD_SENSE_IO, GPIO_MODE_INPUT);
+	gpio_set_pull_mode(BOARD_SENSE_IO, GPIO_PULLUP_ONLY);
+	if (gpio_get_level(BOARD_SENSE_IO) == 0) {
+		// We're the Ethernet board - determine the operating mode
+		ctrl_brd_type = CTRL_BRD_ETH_TYPE;
+		gpio_reset_pin(BRD_E_MODE_SENSE_IO);
+		gpio_set_direction(BRD_E_MODE_SENSE_IO, GPIO_MODE_INPUT);
+		gpio_set_pull_mode(BRD_E_MODE_SENSE_IO, GPIO_PULLUP_ONLY);
+		if (gpio_get_level(BRD_E_MODE_SENSE_IO) == 0) {
+			ctrl_if_mode = CTRL_IF_MODE_ETH;
+			ESP_LOGI(TAG, "Ethernet board type detected - using Ethernet");
+		} else {
+			ctrl_if_mode = CTRL_IF_MODE_WIFI;
+			ESP_LOGI(TAG, "Ethernet board type detected - using WiFi");
+		}
+		
+		ctrl_pin_btn = BRD_E_BTN_IO;
+		ctrl_pin_r_led = BRD_E_RED_LED_IO;
+		ctrl_pin_g_led = BRD_E_GREEN_LED_IO;
+	} else {
+		// We're the WiFi/Serial board - determine the operating mode
+		ctrl_brd_type = CTRL_BRD_WIFI_TYPE;
+		gpio_reset_pin(BRD_W_MODE_SENSE_IO);
+		gpio_set_direction(BRD_W_MODE_SENSE_IO, GPIO_MODE_INPUT);
+		gpio_set_pull_mode(BRD_W_MODE_SENSE_IO, GPIO_PULLUP_ONLY);
+		if (gpio_get_level(BRD_W_MODE_SENSE_IO) == 0) {
+			ctrl_if_mode = CTRL_IF_MODE_SIF;
+			ESP_LOGI(TAG, "WiFi board type detected - using Serial");
+		} else {
+			ctrl_if_mode = CTRL_IF_MODE_WIFI;
+			ESP_LOGI(TAG, "WiFi board type detected - using WiFi");
+		}
+		
+		ctrl_pin_btn = BRD_W_BTN_IO;
+		ctrl_pin_r_led = BRD_W_RED_LED_IO;
+		ctrl_pin_g_led = BRD_W_GREEN_LED_IO;
+	}
 	
 	// Setup the GPIO
-	gpio_reset_pin(BTN_IO);
-	gpio_set_direction(BTN_IO, GPIO_MODE_INPUT);
-	gpio_pullup_en(BTN_IO);
+	gpio_reset_pin((gpio_num_t) ctrl_pin_btn);
+	gpio_set_direction((gpio_num_t) ctrl_pin_btn, GPIO_MODE_INPUT);
+	gpio_pullup_en((gpio_num_t) ctrl_pin_btn);
 	
-	gpio_reset_pin(RED_LED_IO);
-	gpio_set_direction(RED_LED_IO, GPIO_MODE_OUTPUT);
-	gpio_set_drive_capability(RED_LED_IO, GPIO_DRIVE_CAP_3);
+	gpio_reset_pin((gpio_num_t) ctrl_pin_r_led);
+	gpio_set_direction((gpio_num_t) ctrl_pin_r_led, GPIO_MODE_OUTPUT);
+	gpio_set_drive_capability((gpio_num_t) ctrl_pin_r_led, GPIO_DRIVE_CAP_3);
 	
-	gpio_reset_pin(GREEN_LED_IO);
-	gpio_set_direction(GREEN_LED_IO, GPIO_MODE_OUTPUT);
-	gpio_set_drive_capability(GREEN_LED_IO, GPIO_DRIVE_CAP_3);
+	gpio_reset_pin((gpio_num_t) ctrl_pin_g_led);
+	gpio_set_direction((gpio_num_t) ctrl_pin_g_led, GPIO_MODE_OUTPUT);
+	gpio_set_drive_capability((gpio_num_t) ctrl_pin_g_led, GPIO_DRIVE_CAP_3);
 	
 	// Initialize state
 	ctrl_set_state(CTRL_ST_STARTUP);
@@ -198,7 +238,7 @@ static void ctrl_debounce_button(bool* short_p, bool* long_p)
 	*long_p = false;
 	
 	// Get current button value
-	cur_btn = gpio_get_level(BTN_IO) == 0;
+	cur_btn = gpio_get_level(ctrl_pin_btn) == 0;
 	
 	// Evaluate button logic
 	if (cur_btn && prev_btn && !btn_down) {
@@ -233,23 +273,23 @@ static void ctrl_set_led(int color)
 {
 	switch (color) {
 		case CTRL_LED_OFF:
-			gpio_set_level(RED_LED_IO, 0);
-			gpio_set_level(GREEN_LED_IO, 0);
+			gpio_set_level((gpio_num_t) ctrl_pin_r_led, 0);
+			gpio_set_level((gpio_num_t) ctrl_pin_g_led, 0);
 			break;
 		
 		case CTRL_LED_RED:
-			gpio_set_level(RED_LED_IO, 1);
-			gpio_set_level(GREEN_LED_IO, 0);
+			gpio_set_level((gpio_num_t) ctrl_pin_r_led, 1);
+			gpio_set_level((gpio_num_t) ctrl_pin_g_led, 0);
 			break;
 		
 		case CTRL_LED_YEL:
-			gpio_set_level(RED_LED_IO, 1);
-			gpio_set_level(GREEN_LED_IO, 1);
+			gpio_set_level((gpio_num_t) ctrl_pin_r_led, 1);
+			gpio_set_level((gpio_num_t) ctrl_pin_g_led, 1);
 			break;
 		
 		case CTRL_LED_GRN:
-			gpio_set_level(RED_LED_IO, 0);
-			gpio_set_level(GREEN_LED_IO, 1);
+			gpio_set_level((gpio_num_t) ctrl_pin_r_led, 0);
+			gpio_set_level((gpio_num_t) ctrl_pin_g_led, 1);
 			break;
 	}
 }
@@ -259,7 +299,7 @@ static void ctrl_eval_sm()
 {
 	bool btn_short_press;
 	bool btn_long_press;
-	wifi_info_t* wifi_info;
+	net_info_t* net_info;
 	
 	// Look for button presses
 	ctrl_debounce_button(&btn_short_press, &btn_long_press);
@@ -269,50 +309,50 @@ static void ctrl_eval_sm()
 			// Wait to be taken out of this state by a notification
 			break;
 
-		case CTRL_ST_WIFI_NOT_CONNECTED:
-			wifi_info = wifi_get_info();
+		case CTRL_ST_NET_NOT_CONNECTED:
+			net_info = (*net_get_info)();
 			if (btn_long_press) {
 				ctrl_set_state(CTRL_ST_RESET_ALERT);
-			} else if ((wifi_info->flags & WIFI_INFO_FLAG_CONNECTED) == WIFI_INFO_FLAG_CONNECTED) {
-				ctrl_set_state(CTRL_ST_WIFI_CONNECTED);
+			} else if ((net_info->flags & NET_INFO_FLAG_CONNECTED) == NET_INFO_FLAG_CONNECTED) {
+				ctrl_set_state(CTRL_ST_NET_CONNECTED);
 			}
 			break;
 		
-		case CTRL_ST_WIFI_CONNECTED:
-			wifi_info = wifi_get_info();
+		case CTRL_ST_NET_CONNECTED:
+			net_info = (*net_get_info)();
 			if (btn_long_press) {
 				ctrl_set_state(CTRL_ST_RESET_ALERT);
-			} else if ((wifi_info->flags & WIFI_INFO_FLAG_CONNECTED) != WIFI_INFO_FLAG_CONNECTED) {
-				ctrl_set_state(CTRL_ST_WIFI_NOT_CONNECTED);
-			} else if (wifi_cmd_connected()) {
+			} else if ((net_info->flags & NET_INFO_FLAG_CONNECTED) != NET_INFO_FLAG_CONNECTED) {
+				ctrl_set_state(CTRL_ST_NET_NOT_CONNECTED);
+			} else if (net_cmd_connected()) {
 				ctrl_set_state(CTRL_ST_CLIENT_CONNECTED);
 			}
 			break;
 		
 		case CTRL_ST_CLIENT_CONNECTED:
-			if (!ctrl_ser_mode) {
+			if (ctrl_if_mode != CTRL_IF_MODE_SIF) {
 				if (btn_long_press) {
 					ctrl_set_state(CTRL_ST_RESET_ALERT);
-				} else if (!wifi_cmd_connected()) {
-					// Goto wifi not connected in case this was why we lost our client.
-					// If it is connected then we'll quickly go to wifi connected.
-					ctrl_set_state(CTRL_ST_WIFI_NOT_CONNECTED);
+				} else if (!net_cmd_connected()) {
+					// Goto network not connected in case this was why we lost our client.
+					// If it is connected then we'll quickly go to network connected.
+					ctrl_set_state(CTRL_ST_NET_NOT_CONNECTED);
 				}
 			}
 			break;
 		
 		case CTRL_ST_RESET_ALERT:
 			if (--ctrl_action_timer == 0) {
-				// Reset alert done - initiate actual wifi reset
+				// Reset alert done - initiate actual network reset
 				ctrl_set_state(CTRL_ST_RESET_ACTION);
 			}
 			break;
 		
 		case CTRL_ST_RESET_ACTION:
-			wifi_info = wifi_get_info();
-			if ((wifi_info->flags & WIFI_INFO_FLAG_ENABLED) == WIFI_INFO_FLAG_ENABLED) {
+			net_info = (*net_get_info)();
+			if ((net_info->flags & NET_INFO_FLAG_ENABLED) == NET_INFO_FLAG_ENABLED) {
 				if (ctrl_fault_type == CTRL_FAULT_NONE) {
-					ctrl_set_state(CTRL_ST_WIFI_NOT_CONNECTED);
+					ctrl_set_state(CTRL_ST_NET_NOT_CONNECTED);
 				} else {
 					// Return to previous fault indication to encourage user to power-cycle since
 					// we may be halted in main due to the original error
@@ -322,8 +362,8 @@ static void ctrl_eval_sm()
 			break;
 		
 		case CTRL_ST_FAULT:
-			// Remain here until taken out if the fault is cleared or the user resets the wifi (wifi mode)
-			if (!ctrl_ser_mode) {
+			// Remain here until taken out if the fault is cleared or the user resets the network
+			if (ctrl_if_mode != CTRL_IF_MODE_SIF) {
 				if (btn_long_press) {
 					ctrl_set_state(CTRL_ST_RESET_ALERT);
 				}
@@ -345,7 +385,7 @@ static void ctrl_eval_sm()
 			break;
 		
 		default:
-			ctrl_set_state(CTRL_ST_WIFI_NOT_CONNECTED);
+			ctrl_set_state(CTRL_ST_NET_NOT_CONNECTED);
 	}
 }
 
@@ -441,12 +481,12 @@ static void ctrl_set_state(int new_st)
 			ctrl_set_led_state(CTRL_LED_ST_SOLID);
 			break;
 		
-		case CTRL_ST_WIFI_NOT_CONNECTED:
+		case CTRL_ST_NET_NOT_CONNECTED:
 			// Start a slow blink
 			ctrl_set_led_state(CTRL_LED_ST_BLINK_ON);
 			break;
 			
-		case CTRL_ST_WIFI_CONNECTED:
+		case CTRL_ST_NET_CONNECTED:
 			ctrl_set_led(CTRL_LED_YEL);
 			ctrl_set_led_state(CTRL_LED_ST_SOLID);
 			break;
@@ -457,16 +497,16 @@ static void ctrl_set_state(int new_st)
 			break;
 		
 		case CTRL_ST_RESET_ALERT:
-			// Indicate wifi restart triggered
+			// Indicate network restart triggered
 			ctrl_set_led_state(CTRL_LED_ST_RST_ON);
 			ctrl_action_timer = CTRL_RESET_ALERT_MSEC / CTRL_EVAL_MSEC;
 			break;
 		
 		case CTRL_ST_RESET_ACTION:
-			// Re-initialize the wifi info in persistent storage
-			if (ps_reinit_wifi()) {
-				// Attempt to re-initialize the wifi stack
-				if (!wifi_reinit()) {
+			// Re-initialize the network info in persistent storage
+			if (ps_reinit_net()) {
+				// Attempt to re-initialize the network stack
+				if (!(*net_reinit)()) {
 					// Change to fault state
 					ctrl_set_led_state(CTRL_LED_ST_FLT_ON);
 					ctrl_state = CTRL_ST_FAULT;
@@ -574,10 +614,11 @@ static void ctrl_handle_notifications()
 	if (xTaskNotifyWait(0x00, 0xFFFFFFFF, &notification_value, 0)) {
 		if (Notification(notification_value, CTRL_NOTIFY_STARTUP_DONE)) {
 			if (ctrl_state != CTRL_ST_FAULT) {
-				if (ctrl_ser_mode) {
+				if (ctrl_if_mode == CTRL_IF_MODE_SIF) {
+					// SIF interface is ready immediately
 					ctrl_set_state(CTRL_ST_CLIENT_CONNECTED);
 				} else {
-					ctrl_set_state(CTRL_ST_WIFI_NOT_CONNECTED);
+					ctrl_set_state(CTRL_ST_NET_NOT_CONNECTED);
 				}
 			}
 		}
@@ -615,4 +656,3 @@ static void ctrl_handle_notifications()
 		}
 	}
 }
-

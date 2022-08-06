@@ -3,7 +3,7 @@
  *
  * Contains the functions to configure the Lepton via I2C.
  *
- * Copyright 2020 Dan Julio
+ * Copyright 2020-2022 Dan Julio
  *
  * This file is part of tCam.
  *

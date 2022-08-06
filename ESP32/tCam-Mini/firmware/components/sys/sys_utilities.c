@@ -4,7 +4,7 @@
  * Contains functions to initialize the system, other utility functions and a set
  * of globally available handles for the various tasks (to use for task notifications).
  *
- * Copyright 2020 Dan Julio
+ * Copyright 2020-2022 Dan Julio
  *
  * This file is part of tCam.
  *
@@ -22,6 +22,7 @@
  * along with tCam.  If not, see <https://www.gnu.org/licenses/>.
  *
  */
+#include "ctrl_task.h"
 #include "esp_system.h"
 #include "esp_log.h"
 #include "esp_heap_caps.h"
@@ -31,12 +32,13 @@
 #include "driver/spi_master.h"
 #include "driver/spi_slave.h"
 #include "json_utilities.h"
+#include "net_utilities.h"
 #include "ps_utilities.h"
 #include "sys_utilities.h"
 #include "time_utilities.h"
-#include "wifi_utilities.h"
 #include "i2c.h"
 #include "vospi.h"
+#include <string.h>
 
 
 
@@ -97,6 +99,7 @@ static spi_slave_transaction_t spi_slave_t;
 //
 // Forward declarations for internal functions
 //
+static esp_err_t _sys_spi_slave_init();
 static void IRAM_ATTR _sys_spi_slave_post_setup_cb();
 static void IRAM_ATTR _sys_spi_slave_post_trans_cb();
 
@@ -108,55 +111,52 @@ static void IRAM_ATTR _sys_spi_slave_post_trans_cb();
 /**
  * Initialize the ESP32 GPIO and internal peripherals
  */
-bool system_esp_io_init(bool ser_mode)
+bool system_esp_io_init(int brd_type, int if_mode)
 {
+	esp_err_t ret;
+	spi_bus_config_t spi_buscfg;
+	
 	ESP_LOGI(TAG, "ESP32 Peripheral Initialization");	
 	
 	// Attempt to initialize the I2C Master
-	if (i2c_master_init() != ESP_OK) {
+	if (brd_type == CTRL_BRD_ETH_TYPE) {
+		ret = i2c_master_init(BRD_E_I2C_MASTER_SCL_IO, BRD_E_I2C_MASTER_SDA_IO);
+	} else {
+		ret = i2c_master_init(BRD_W_I2C_MASTER_SCL_IO, BRD_W_I2C_MASTER_SDA_IO);
+	}
+	if (ret != ESP_OK) {
 		ESP_LOGE(TAG, "I2C Master initialization failed");
 		return false;
 	}
 	
 	// Attempt to initialize the SPI Master used by the lep_task
-	spi_bus_config_t spi_buscfg1 = {
-		.miso_io_num=LEP_MISO_IO,
-		.mosi_io_num=-1,
-		.sclk_io_num=LEP_SCK_IO,
-		.max_transfer_sz=LEP_PKT_LENGTH,
-		.quadwp_io_num=-1,
-		.quadhd_io_num=-1
-	};
+	memset(&spi_buscfg, 0, sizeof(spi_bus_config_t));
+	if (brd_type == CTRL_BRD_ETH_TYPE) {
+		spi_buscfg.miso_io_num=BRD_E_LEP_MISO_IO;
+		spi_buscfg.mosi_io_num=-1;
+		spi_buscfg.sclk_io_num=BRD_E_LEP_SCK_IO;
+		spi_buscfg.max_transfer_sz=LEP_PKT_LENGTH;
+		spi_buscfg.quadwp_io_num=-1;
+		spi_buscfg.quadhd_io_num=-1;
+	} else {
+		spi_buscfg.miso_io_num=BRD_W_LEP_MISO_IO;
+		spi_buscfg.mosi_io_num=-1;
+		spi_buscfg.sclk_io_num=BRD_W_LEP_SCK_IO;
+		spi_buscfg.max_transfer_sz=LEP_PKT_LENGTH;
+		spi_buscfg.quadwp_io_num=-1;
+		spi_buscfg.quadhd_io_num=-1;
+	}
 	
-	if (spi_bus_initialize(LEP_SPI_HOST, &spi_buscfg1, LEP_DMA_NUM) != ESP_OK) {
+	if (spi_bus_initialize(LEP_SPI_HOST, &spi_buscfg, LEP_DMA_NUM) != ESP_OK) {
 		ESP_LOGE(TAG, "Lepton Master initialization failed");
 		return false;
 	}
 	
-	if (ser_mode) {
-		// Attempt to initialize the SPI Slave used by rsp_task
-		spi_bus_config_t spi_buscfg2 = {
-			.mosi_io_num=-1,
-			.miso_io_num=HOST_MISO_IO,
-			.sclk_io_num=HOST_SCK_IO,
-			.quadwp_io_num=-1,
-	        .quadhd_io_num=-1,
-			.max_transfer_sz=JSON_MAX_IMAGE_TEXT_LEN
-		};
-		
-		spi_slave_interface_config_t spi_slvcfg={
-			.mode=HOST_SPI_MODE,
-			.spics_io_num=HOST_CSN_IO,
-			.queue_size=1,
-			.flags=0,
-			.post_setup_cb=_sys_spi_slave_post_setup_cb,
-			.post_trans_cb=_sys_spi_slave_post_trans_cb
-    	};
-    	
-    	if (spi_slave_initialize(HOST_SPI_HOST, &spi_buscfg2, &spi_slvcfg, HOST_DMA_NUM) != ESP_OK) {
-    		ESP_LOGE(TAG, "SPI Slave initialization failed");
+	if (if_mode == CTRL_IF_MODE_SIF) {
+		if ((ret = _sys_spi_slave_init()) != ESP_OK) {
+			ESP_LOGE(TAG, "SPI Slave initialization failed (%d)", ret);
 			return false;
-    	}
+		}
 	}
 	
 	return true;
@@ -166,13 +166,13 @@ bool system_esp_io_init(bool ser_mode)
 /**
  * Initialize the board-level peripheral subsystems
  */
-bool system_peripheral_init(bool ser_mode)
+bool system_peripheral_init(int brd_type, int if_mode)
 {
 	ESP_LOGI(TAG, "System Peripheral Initialization");
 	
 	time_init();
 	
-	if (!ps_init(ser_mode)) {
+	if (!ps_init(brd_type, if_mode)) {
 		ESP_LOGE(TAG, "Persistent Storage initialization failed");
 		return false;
 	}
@@ -180,20 +180,37 @@ bool system_peripheral_init(bool ser_mode)
 	// Get the initial lepton configuration	
 	ps_get_lep_state(&lep_st);
 	
-	if (!ser_mode) {
-		if (!wifi_init()) {
-			ESP_LOGE(TAG, "WiFi initialization failed");
+	// Setup network if required
+	if (if_mode != CTRL_IF_MODE_SIF) {
+		// Setup function points to the appropriate interface
+		net_init_if(if_mode);
+		
+		// Attempt to initialize the interface
+		if (!(*net_init)()) {
+			if (if_mode == CTRL_IF_MODE_ETH) {
+				ESP_LOGE(TAG, "Ethernet initialization failed");
+			} else {
+				ESP_LOGE(TAG, "WiFi initialization failed");
+			}
 			return false;
 		}
 	}
 	
 	// Initialize the Lepton GPIO and then reset the Lepton
 	// (reset handles potential external crystal oscillator slow start-up)
-	gpio_set_direction(LEP_VSYNC_IO, GPIO_MODE_INPUT);
-	gpio_set_direction(LEP_RESET_IO, GPIO_MODE_OUTPUT);
-	gpio_set_level(LEP_RESET_IO, 1);
-	vTaskDelay(pdMS_TO_TICKS(10));
-	gpio_set_level(LEP_RESET_IO, 0);
+	if (brd_type == CTRL_BRD_ETH_TYPE) {
+		gpio_set_direction(BRD_E_LEP_VSYNC_IO, GPIO_MODE_INPUT);
+		gpio_set_direction(BRD_E_LEP_RESET_IO, GPIO_MODE_OUTPUT);
+		gpio_set_level(BRD_E_LEP_RESET_IO, 1);
+		vTaskDelay(pdMS_TO_TICKS(10));
+		gpio_set_level(BRD_E_LEP_RESET_IO, 0);
+	} else {
+		gpio_set_direction(BRD_W_LEP_VSYNC_IO, GPIO_MODE_INPUT);
+		gpio_set_direction(BRD_W_LEP_RESET_IO, GPIO_MODE_OUTPUT);
+		gpio_set_level(BRD_W_LEP_RESET_IO, 1);
+		vTaskDelay(pdMS_TO_TICKS(10));
+		gpio_set_level(BRD_W_LEP_RESET_IO, 0);
+	}
 	
 	return true;
 }
@@ -301,13 +318,37 @@ bool system_spi_slave_busy()
 }
 
 
-void system_spi_wait_done()
+// Returns false if the SPI slave is no longer functional
+bool system_spi_wait_done()
 {
+	esp_err_t ret;
 	spi_slave_transaction_t *t;
 	
-	// Have to call driver to get the result
+	// Call driver to get the result
 	t = &spi_slave_t;
-	(void) spi_slave_get_trans_result(HOST_SPI_HOST, &t, 1);
+	ret = spi_slave_get_trans_result(HOST_SPI_HOST, &t, pdMS_TO_TICKS(SPI_SLAVE_TIMEOUT_MSEC));
+	
+	if (ret == ESP_OK) {
+		return true;
+	} else if (ret == ESP_ERR_TIMEOUT) {
+		ESP_LOGI(TAG, "SPI Slave timeout - restarting");
+	} else {
+		ESP_LOGE(TAG, "SPI Slave error (%d) - restarting", ret);
+	}
+	
+	// Attempt to shut down and restart the SPI slave
+	if ((ret = spi_slave_free(HOST_SPI_HOST)) == ESP_OK) {
+		if ((ret = _sys_spi_slave_init()) == ESP_OK) {
+			spi_slave_busy = false;
+			return true;
+		} else {
+			ESP_LOGE(TAG, "SPI Slave restart failed (%d)", ret);
+			return false;
+		}
+	} else {
+		ESP_LOGE(TAG, "SPI Slave shutdown failed (%d)", ret);
+		return false;
+	}
 }
 
 
@@ -315,6 +356,31 @@ void system_spi_wait_done()
 //
 // Internal functions
 //
+static esp_err_t _sys_spi_slave_init()
+{
+	// Attempt to initialize the SPI Slave used by rsp_task
+	spi_bus_config_t spi_buscfg = {
+		.mosi_io_num=-1,
+		.miso_io_num=BRD_W_HOST_MISO_IO,
+		.sclk_io_num=BRD_W_HOST_SCK_IO,
+		.quadwp_io_num=-1,
+        .quadhd_io_num=-1,
+		.max_transfer_sz=JSON_MAX_IMAGE_TEXT_LEN
+	};
+	
+	spi_slave_interface_config_t spi_slvcfg={
+		.mode=HOST_SPI_MODE,
+		.spics_io_num=BRD_W_HOST_CSN_IO,
+		.queue_size=1,
+		.flags=0,
+		.post_setup_cb=_sys_spi_slave_post_setup_cb,
+		.post_trans_cb=_sys_spi_slave_post_trans_cb
+ 	};
+ 	
+ 	return (spi_slave_initialize(HOST_SPI_HOST, &spi_buscfg, &spi_slvcfg, HOST_DMA_NUM));
+}
+
+
 static void IRAM_ATTR _sys_spi_slave_post_setup_cb()
 {
 	spi_slave_busy = true;

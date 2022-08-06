@@ -4,7 +4,7 @@
  * Provides I2C Access routines for other modules/tasks.  Provides a locking mechanism
  * since the underlying ESP IDF routines are not thread safe.
  *
- * Copyright 2020 Dan Julio
+ * Copyright 2020-2022 Dan Julio
  *
  * This file is part of tCam.
  *
@@ -43,7 +43,7 @@ static SemaphoreHandle_t i2c_mutex;
 /**
  * i2c master initialization
  */
-esp_err_t i2c_master_init()
+esp_err_t i2c_master_init(int scl_pin, int sda_pin)
 {
     int i2c_master_port = I2C_MASTER_NUM;
     i2c_config_t conf;
@@ -51,9 +51,9 @@ esp_err_t i2c_master_init()
     i2c_mutex = xSemaphoreCreateMutex();
     
     conf.mode = I2C_MODE_MASTER;
-    conf.sda_io_num = I2C_MASTER_SDA_IO;
+    conf.sda_io_num = sda_pin;
     conf.sda_pullup_en = GPIO_PULLUP_ENABLE;
-    conf.scl_io_num = I2C_MASTER_SCL_IO;
+    conf.scl_io_num = scl_pin;
     conf.scl_pullup_en = GPIO_PULLUP_ENABLE;
     conf.master.clk_speed = I2C_MASTER_FREQ_HZ;
     

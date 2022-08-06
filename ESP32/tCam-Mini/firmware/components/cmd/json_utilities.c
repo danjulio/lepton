@@ -85,7 +85,8 @@ const cmd_name_t command_list[CMD_NUM] = {
 	{CMD_GET_LEP_CCI_S, CMD_GET_LEP_CCI},
 	{CMD_SET_LEP_CCI_S, CMD_SET_LEP_CCI},
 	{CMD_FW_UPD_REQ_S, CMD_FW_UPD_REQ},
-	{CMD_FW_UPD_SEG_S, CMD_FW_UPD_SEG}
+	{CMD_FW_UPD_SEG_S, CMD_FW_UPD_SEG},
+	{CMD_DUMP_SCREEN_S, CMD_DUMP_SCREEN}
 };
 
 
@@ -95,7 +96,6 @@ const cmd_name_t command_list[CMD_NUM] = {
 //
 static const char* TAG = "json_utilities";
 
-static char* json_image_text;       // Loaded for combined image data
 static char* json_response_text;    // Loaded for response data
 
 static unsigned char* base64_lep_data;
@@ -131,12 +131,6 @@ static bool json_ip_string_to_array(uint8_t* ip_array, char* ip_string);
 bool json_init()
 {
 	// Get memory for the json text output strings
-	json_image_text = heap_caps_malloc(JSON_MAX_IMAGE_TEXT_LEN, MALLOC_CAP_8BIT);
-	if (json_image_text == NULL) {
-		ESP_LOGE(TAG, "Could not allocate json_image_text buffer");
-		return false;
-	}
-	
 	json_response_text = heap_caps_malloc(JSON_MAX_RSP_TEXT_LEN, MALLOC_CAP_8BIT);
 	if (json_response_text == NULL) {
 		ESP_LOGE(TAG, "Could not allocate json_response_text buffer");
@@ -265,8 +259,11 @@ char* json_get_status(uint32_t* len)
 	char buf[80];
 	cJSON* root;
 	cJSON* status;
+	int brd_type;
+	int if_type;
 	int model_field;
-	wifi_info_t* wifi_infoP;
+	net_info_t* net_info;
+	uint8_t sys_mac_addr[6];
 	const esp_app_desc_t* app_desc;
 	tmElements_t te;
 	
@@ -280,10 +277,35 @@ char* json_get_status(uint32_t* len)
 	
 	cJSON_AddItemToObject(root, "status", status=cJSON_CreateObject());
 	
-	wifi_infoP = wifi_get_info();
-	cJSON_AddStringToObject(status, "Camera", wifi_infoP->ap_ssid);
+	ctrl_get_if_mode(&brd_type, &if_type);
+	if (if_type == CTRL_IF_MODE_SIF) {
+		// Get the system's default MAC address and add 1 to match the "Soft AP" mode
+		// (see "Miscellaneous System APIs" in the ESP-IDF documentation)
+		esp_efuse_mac_get_default(sys_mac_addr);
+		sys_mac_addr[5] = sys_mac_addr[5] + 1;
+		sprintf(buf, "%s%c%c%c%c", PS_DEFAULT_AP_SSID,
+		    ps_nibble_to_ascii(sys_mac_addr[4] >> 4),
+		    ps_nibble_to_ascii(sys_mac_addr[4]),
+		    ps_nibble_to_ascii(sys_mac_addr[5] >> 4),
+	 	    ps_nibble_to_ascii(sys_mac_addr[5]));
+	 	cJSON_AddStringToObject(status, "Camera", buf);
+	} else {
+		net_info = net_get_info();
+		cJSON_AddStringToObject(status, "Camera", net_info->ap_ssid);
+	} 
 	
-	model_field = ctrl_get_ser_mode() ? CAMERA_MODEL_NUM_SIF : CAMERA_MODEL_NUM_WIFI;
+	model_field = CAMERA_CAP_MASK_CORE;
+	model_field |= (brd_type == CTRL_BRD_ETH_TYPE) ? CAMERA_MODEL_NUM_ETH : CAMERA_MODEL_NUM_WIFI;
+	switch (if_type) {
+		case CTRL_IF_MODE_ETH:
+			model_field |= CAMERA_CAP_MASK_IF_ETH;
+			break;
+		case CTRL_IF_MODE_SIF:
+			model_field |= CAMERA_CAP_MASK_IF_SIF;
+			break;
+		default:
+			model_field |= CAMERA_CAP_MASK_IF_WIFI;
+	}
 	model_field |= lepton_is_radiometric() ? CAMERA_CAP_MASK_RAD : CAMERA_CAP_MASK_NONRAD;
 	cJSON_AddNumberToObject(status, "Model", model_field);
 	
@@ -313,10 +335,10 @@ char* json_get_wifi(uint32_t* len)
 	char ip_string[16];  // "XXX:XXX:XXX:XXX" + null
 	cJSON* root;
 	cJSON* wifi;
-	wifi_info_t* wifi_infoP;
+	net_info_t* net_infoP;
 	
 	// Get wifi information
-	wifi_infoP = wifi_get_info();
+	net_infoP = net_get_info();
 	
 	// Create and add to the metadata object
 	root=cJSON_CreateObject();
@@ -324,32 +346,32 @@ char* json_get_wifi(uint32_t* len)
 	
 	cJSON_AddItemToObject(root, "wifi", wifi=cJSON_CreateObject());
 	
-	cJSON_AddStringToObject(wifi, "ap_ssid", wifi_infoP->ap_ssid);
-	cJSON_AddStringToObject(wifi, "sta_ssid", wifi_infoP->sta_ssid);
-	cJSON_AddNumberToObject(wifi, "flags", (const double) wifi_infoP->flags);
+	cJSON_AddStringToObject(wifi, "ap_ssid", net_infoP->ap_ssid);
+	cJSON_AddStringToObject(wifi, "sta_ssid", net_infoP->sta_ssid);
+	cJSON_AddNumberToObject(wifi, "flags", (const double) net_infoP->flags);
 	
-	sprintf(ip_string, "%d.%d.%d.%d", wifi_infoP->ap_ip_addr[3],
-			                          wifi_infoP->ap_ip_addr[2],
-			                          wifi_infoP->ap_ip_addr[1],
-			                          wifi_infoP->ap_ip_addr[0]);
+	sprintf(ip_string, "%d.%d.%d.%d", net_infoP->ap_ip_addr[3],
+			                          net_infoP->ap_ip_addr[2],
+			                          net_infoP->ap_ip_addr[1],
+			                          net_infoP->ap_ip_addr[0]);
 	cJSON_AddStringToObject(wifi, "ap_ip_addr", ip_string);
 	
-	sprintf(ip_string, "%d.%d.%d.%d", wifi_infoP->sta_ip_addr[3],
-			                          wifi_infoP->sta_ip_addr[2],
-			                          wifi_infoP->sta_ip_addr[1],
-			                          wifi_infoP->sta_ip_addr[0]);
+	sprintf(ip_string, "%d.%d.%d.%d", net_infoP->sta_ip_addr[3],
+			                          net_infoP->sta_ip_addr[2],
+			                          net_infoP->sta_ip_addr[1],
+			                          net_infoP->sta_ip_addr[0]);
 	cJSON_AddStringToObject(wifi, "sta_ip_addr", ip_string);
 	
-	sprintf(ip_string, "%d.%d.%d.%d", wifi_infoP->sta_netmask[3],
-			                          wifi_infoP->sta_netmask[2],
-			                          wifi_infoP->sta_netmask[1],
-			                          wifi_infoP->sta_netmask[0]);
+	sprintf(ip_string, "%d.%d.%d.%d", net_infoP->sta_netmask[3],
+			                          net_infoP->sta_netmask[2],
+			                          net_infoP->sta_netmask[1],
+			                          net_infoP->sta_netmask[0]);
 	cJSON_AddStringToObject(wifi, "sta_netmask", ip_string);
 	
-	sprintf(ip_string, "%d.%d.%d.%d", wifi_infoP->cur_ip_addr[3],
-			                          wifi_infoP->cur_ip_addr[2],
-			                          wifi_infoP->cur_ip_addr[1],
-			                          wifi_infoP->cur_ip_addr[0]);
+	sprintf(ip_string, "%d.%d.%d.%d", net_infoP->cur_ip_addr[3],
+			                          net_infoP->cur_ip_addr[2],
+			                          net_infoP->cur_ip_addr[1],
+			                          net_infoP->cur_ip_addr[0]);
 	cJSON_AddStringToObject(wifi, "cur_ip_addr", ip_string);
 	
 	// Tightly print the object into our buffer with delimitors
@@ -632,18 +654,18 @@ bool json_parse_set_time(cJSON* cmd_args, tmElements_t* te)
 
 
 /**
- * Fill in a wifi_info_t object with arguments from a set_wifi command, preserving
+ * Fill in a net_info_t object with arguments from a set_wifi command, preserving
  * unmodified elements
  */
-bool json_parse_set_wifi(cJSON* cmd_args, wifi_info_t* new_wifi_info)
+bool json_parse_set_wifi(cJSON* cmd_args, net_info_t* new_net_info)
 {
 	char* s;
 	int i;
 	int item_count = 0;
-	wifi_info_t* wifi_infoP;
+	net_info_t* net_infoP;
 	
 	// Get existing settings
-	wifi_infoP = wifi_get_info();
+	net_infoP = net_get_info();
 	
 	if (cmd_args != NULL) {
 		if (cJSON_HasObjectItem(cmd_args, "ap_ssid")) {
@@ -653,14 +675,14 @@ bool json_parse_set_wifi(cJSON* cmd_args, wifi_info_t* new_wifi_info)
 				ESP_LOGE(TAG, "set_wifi zero length ap_ssid");
 				return false;
 			} else if (i <= PS_SSID_MAX_LEN) {
-				strcpy(new_wifi_info->ap_ssid, s);
+				strcpy(new_net_info->ap_ssid, s);
 				item_count++;
 			} else {
 				ESP_LOGE(TAG, "set_wifi ap_ssid: %s too long", s);
 				return false;
 			}
 		} else {
-			strcpy(new_wifi_info->ap_ssid, wifi_infoP->ap_ssid);
+			strcpy(new_net_info->ap_ssid, net_infoP->ap_ssid);
 		}
 		
 		if (cJSON_HasObjectItem(cmd_args, "sta_ssid")) {
@@ -670,89 +692,89 @@ bool json_parse_set_wifi(cJSON* cmd_args, wifi_info_t* new_wifi_info)
 				ESP_LOGE(TAG, "set_wifi zero length sta_ssid");
 				return false;
 			} else if (i <= PS_SSID_MAX_LEN) {
-				strcpy(new_wifi_info->sta_ssid, s);
+				strcpy(new_net_info->sta_ssid, s);
 				item_count++;
 			} else {
 				ESP_LOGE(TAG, "set_wifi sta_ssid: %s too long", s);
 				return false;
 			}
 		} else {
-			strcpy(new_wifi_info->sta_ssid, wifi_infoP->sta_ssid);
+			strcpy(new_net_info->sta_ssid, net_infoP->sta_ssid);
 		}
 		
 		if (cJSON_HasObjectItem(cmd_args, "ap_pw")) {
 			s = cJSON_GetObjectItem(cmd_args, "ap_pw")->valuestring;
 			i = strlen(s);
 			if ((i >= 8) && (i <= PS_PW_MAX_LEN)) {
-				strcpy(new_wifi_info->ap_pw, s);
+				strcpy(new_net_info->ap_pw, s);
 				item_count++;
 			} else {
 				ESP_LOGE(TAG, "set_wifi ap_pw: %s must be between 8 and %d characters", s, PS_PW_MAX_LEN);
 				return false;
 			}
 		} else {
-			strcpy(new_wifi_info->ap_pw, wifi_infoP->ap_pw);
+			strcpy(new_net_info->ap_pw, net_infoP->ap_pw);
 		}
 		
 		if (cJSON_HasObjectItem(cmd_args, "sta_pw")) {
 			s = cJSON_GetObjectItem(cmd_args, "sta_pw")->valuestring;
 			i = strlen(s);
 			if ((i >= 8) && (i <= PS_PW_MAX_LEN)) {
-				strcpy(new_wifi_info->sta_pw, s);
+				strcpy(new_net_info->sta_pw, s);
 				item_count++;
 			} else {
 				ESP_LOGE(TAG, "set_wifi sta_pw: %s must be between 8 and %d characters", s, PS_PW_MAX_LEN);
 				return false;
 			}
 		} else {
-			strcpy(new_wifi_info->sta_pw, wifi_infoP->sta_pw);
+			strcpy(new_net_info->sta_pw, net_infoP->sta_pw);
 		}
 		
 		if (cJSON_HasObjectItem(cmd_args, "flags")) {
-			new_wifi_info->flags = (uint8_t) cJSON_GetObjectItem(cmd_args, "flags")->valueint;
+			new_net_info->flags = (uint8_t) cJSON_GetObjectItem(cmd_args, "flags")->valueint;
 			item_count++;
 		} else {
-			new_wifi_info->flags = wifi_infoP->flags;
+			new_net_info->flags = net_infoP->flags;
 		}
 		
 		if (cJSON_HasObjectItem(cmd_args, "ap_ip_addr")) {
 			s = cJSON_GetObjectItem(cmd_args, "ap_ip_addr")->valuestring;
-			if (json_ip_string_to_array(new_wifi_info->ap_ip_addr, s)) {
+			if (json_ip_string_to_array(new_net_info->ap_ip_addr, s)) {
 				item_count++;
 			} else {
 				ESP_LOGE(TAG, "Illegal set_wifi ap_ip_addr: %s", s);
 				return false;
 			}
 		} else {
-			for (i=0; i<4; i++) new_wifi_info->ap_ip_addr[i] = wifi_infoP->ap_ip_addr[i];
+			for (i=0; i<4; i++) new_net_info->ap_ip_addr[i] = net_infoP->ap_ip_addr[i];
 		}
 		
 		if (cJSON_HasObjectItem(cmd_args, "sta_ip_addr")) {
 			s = cJSON_GetObjectItem(cmd_args, "sta_ip_addr")->valuestring;
-			if (json_ip_string_to_array(new_wifi_info->sta_ip_addr, s)) {
+			if (json_ip_string_to_array(new_net_info->sta_ip_addr, s)) {
 				item_count++;
 			} else {
 				ESP_LOGE(TAG, "Illegal set_wifi sta_ip_addr: %s", s);
 				return false;
 			}
 		} else {
-			for (i=0; i<4; i++) new_wifi_info->sta_ip_addr[i] = wifi_infoP->sta_ip_addr[i];
+			for (i=0; i<4; i++) new_net_info->sta_ip_addr[i] = net_infoP->sta_ip_addr[i];
 		}
 		
 		if (cJSON_HasObjectItem(cmd_args, "sta_netmask")) {
 			s = cJSON_GetObjectItem(cmd_args, "sta_netmask")->valuestring;
-			if (json_ip_string_to_array(new_wifi_info->sta_netmask, s)) {
+			if (json_ip_string_to_array(new_net_info->sta_netmask, s)) {
 				item_count++;
 			} else {
 				ESP_LOGE(TAG, "Illegal set_wifi sta_netmask: %s", s);
 				return false;
 			}
 		} else {
-			for (i=0; i<4; i++) new_wifi_info->sta_netmask[i] = wifi_infoP->sta_netmask[i];
+			for (i=0; i<4; i++) new_net_info->sta_netmask[i] = net_infoP->sta_netmask[i];
 		}
 		
 		// Just copy existing address over
-		for (i=0; i<4; i++) new_wifi_info->cur_ip_addr[i] = wifi_infoP->cur_ip_addr[i];
+		for (i=0; i<4; i++) new_net_info->cur_ip_addr[i] = net_infoP->cur_ip_addr[i];
 		
 		return (item_count > 0);
 	}
@@ -1121,24 +1143,25 @@ static void json_free_cci_reg_base64_data()
  */
 static bool json_add_metadata_object(cJSON* parent)
 {
-	bool ser_mode;
+	int brd_type;
+	int if_type;
 	char buf[80];
 	cJSON* meta;
 	int model_field;
-	wifi_info_t* wifi_info;
+	net_info_t* net_info;
 	uint8_t sys_mac_addr[6];
 	const esp_app_desc_t* app_desc;
 	tmElements_t te;
 	
 	// Get system information
-	ser_mode = ctrl_get_ser_mode();
+	ctrl_get_if_mode(&brd_type, &if_type);
 	app_desc = esp_ota_get_app_description();
 	time_get(&te);
 	
 	// Create and add to the metadata object
 	cJSON_AddItemToObject(parent, "metadata", meta=cJSON_CreateObject());
 	
-	if (ser_mode) {
+	if (if_type == CTRL_IF_MODE_SIF) {
 		// Get the system's default MAC address and add 1 to match the "Soft AP" mode
 		// (see "Miscellaneous System APIs" in the ESP-IDF documentation)
 		esp_efuse_mac_get_default(sys_mac_addr);
@@ -1150,11 +1173,22 @@ static bool json_add_metadata_object(cJSON* parent)
 	 	    ps_nibble_to_ascii(sys_mac_addr[5]));
 	 	cJSON_AddStringToObject(meta, "Camera", buf);
 	} else {
-		wifi_info = wifi_get_info();
-		cJSON_AddStringToObject(meta, "Camera", wifi_info->ap_ssid);
+		net_info = net_get_info();
+		cJSON_AddStringToObject(meta, "Camera", net_info->ap_ssid);
 	}
 	
-	model_field = ser_mode ? CAMERA_MODEL_NUM_SIF : CAMERA_MODEL_NUM_WIFI;
+	model_field = CAMERA_CAP_MASK_CORE;
+	model_field |= (brd_type == CTRL_BRD_ETH_TYPE) ? CAMERA_MODEL_NUM_ETH : CAMERA_MODEL_NUM_WIFI;
+	switch (if_type) {
+		case CTRL_IF_MODE_ETH:
+			model_field |= CAMERA_CAP_MASK_IF_ETH;
+			break;
+		case CTRL_IF_MODE_SIF:
+			model_field |= CAMERA_CAP_MASK_IF_SIF;
+			break;
+		default:
+			model_field |= CAMERA_CAP_MASK_IF_WIFI;
+	}
 	model_field |= lepton_is_radiometric() ? CAMERA_CAP_MASK_RAD : CAMERA_CAP_MASK_NONRAD;
 	cJSON_AddNumberToObject(meta, "Model", model_field);
 	
@@ -1192,7 +1226,7 @@ static uint32_t json_generate_response_string(cJSON* root, char* json_string)
 
 
 /**
- * Convert a string in the form of "XXX.XXX.XXX.XXX" into a 4-byte array for wifi_info_t
+ * Convert a string in the form of "XXX.XXX.XXX.XXX" into a 4-byte array for net_info_t
  */
 static bool json_ip_string_to_array(uint8_t* ip_array, char* ip_string)
 {

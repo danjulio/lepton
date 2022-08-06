@@ -4,7 +4,7 @@
  * Provides access to the serial interface for serial mode communications.  Designed
  * to be polled.
  *
- * Copyright 2020-2021 Dan Julio
+ * Copyright 2020-2022 Dan Julio
  *
  * This file is part of tCam.
  *

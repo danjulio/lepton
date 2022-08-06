@@ -2,7 +2,7 @@
  * tCam-Mini Main
  *
  *
- * Copyright 2020-2021 Dan Julio
+ * Copyright 2020-2022 Dan Julio
  *
  * This file is part of tCam.
  *
@@ -24,8 +24,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
+#include "net_cmd_task.h"
 #include "sif_cmd_task.h"
-#include "wifi_cmd_task.h"
 #include "ctrl_task.h"
 #include "lep_task.h"
 #include "mon_task.h"
@@ -39,34 +39,40 @@ static const char* TAG = "main";
 
 void app_main(void)
 {
-	bool ser_mode;
+	int brd_type;
+	int if_mode;
 	
+#ifdef TCAM_ETHERNET
+	ESP_LOGI(TAG, "tCamE startup");
+#else
     ESP_LOGI(TAG, "tCam Mini startup");
+#endif
     
     // Start the control task to light the red light immediately
+    // and to determine what kind of interface we will be using
     xTaskCreatePinnedToCore(&ctrl_task, "ctrl_task", 2048, NULL, 1, &task_handle_ctrl, 0);
     
     // Allow task to start and determine operating mode
     vTaskDelay(pdMS_TO_TICKS(50));
-    ser_mode = ctrl_get_ser_mode();
+    ctrl_get_if_mode(&brd_type, &if_mode);
     
-    // Initialize the SPI and I2C drivers and determine the operating mode (wifi or serial comms)
-    if (!system_esp_io_init(ser_mode)) {
-    	ESP_LOGE(TAG, "tCam Mini ESP32 init failed");
+    // Initialize the SPI and I2C drivers
+    if (!system_esp_io_init(brd_type, if_mode)) {
+    	ESP_LOGE(TAG, "ESP32 init failed");
     	ctrl_set_fault_type(CTRL_FAULT_ESP32_INIT);
     	while (1) {vTaskDelay(pdMS_TO_TICKS(100));}
     }
     
     // Initialize the camera's peripheral devices
-    if (!system_peripheral_init(ser_mode)) {
-    	ESP_LOGE(TAG, "tCam Mini Peripheral init failed");
+    if (!system_peripheral_init(brd_type, if_mode)) {
+    	ESP_LOGE(TAG, "Peripheral init failed");
     	ctrl_set_fault_type(CTRL_FAULT_PERIPH_INIT);
     	while (1) {vTaskDelay(pdMS_TO_TICKS(100));}
     }
     
     // Pre-allocate big buffers
     if (!system_buffer_init()) {
-    	ESP_LOGE(TAG, "tCam Mini memory allocate failed");
+    	ESP_LOGE(TAG, "Memory allocate failed");
     	ctrl_set_fault_type(CTRL_FAULT_MEM_INIT);
     	while (1) {vTaskDelay(pdMS_TO_TICKS(100));}
     }
@@ -80,12 +86,12 @@ void app_main(void)
     // Start tasks
     //  Core 0 : PRO - everything but lepton task
     //  Core 1 : APP - lepton task
-    if (ser_mode) {
+    if (if_mode == CTRL_IF_MODE_SIF) {
     	xTaskCreatePinnedToCore(&sif_cmd_task, "sif_cmd_task",  3072, NULL, 1, &task_handle_cmd,  0);
     	xTaskCreatePinnedToCore(&rsp_task, "rsp_task",  3072, NULL, 19, &task_handle_rsp,  0);
     	xTaskCreatePinnedToCore(&lep_task, "lep_task",  2048, NULL, 18, &task_handle_lep,  1);
     } else {
-    	xTaskCreatePinnedToCore(&wifi_cmd_task, "wifi_cmd_task",  3072, NULL, 1, &task_handle_cmd,  0);
+    	xTaskCreatePinnedToCore(&net_cmd_task, "net_cmd_task",  3072, NULL, 1, &task_handle_cmd,  0);
     	xTaskCreatePinnedToCore(&rsp_task, "rsp_task",  3072, NULL, 18, &task_handle_rsp,  0);
     	xTaskCreatePinnedToCore(&lep_task, "lep_task",  2048, NULL, 19, &task_handle_lep,  1);
     }

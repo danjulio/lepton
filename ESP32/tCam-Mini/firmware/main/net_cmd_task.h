@@ -1,10 +1,11 @@
 /*
- * WiFi Cmd Task
+ * Network Command Task
  *
- * Implement the command processing module including management of the WiFi interface.
- * Designed to be executed if WiFi communication is enabled.
+ * Implement the command processing module for use when either the
+ * Ethernet or WiFi interfaces are active.  Enable mDNS for device
+ * discovery.
  *
- * Copyright 2020-2021 Dan Julio
+ * Copyright 2020-2022 Dan Julio
  *
  * This file is part of tCam.
  *
@@ -22,8 +23,8 @@
  * along with tCam.  If not, see <https://www.gnu.org/licenses/>.
  *
  */
-#ifndef WIFI_CMD_TASK_H
-#define WIFI_CMD_TASK_H
+#ifndef NET_CMD_TASK_H
+#define NET_CMD_TASK_H
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -31,10 +32,10 @@
 
 
 //
-// WiFi CMD Task API
+// Network CMD Task API
 //
-void wifi_cmd_task();
-bool wifi_cmd_connected();
-int wifi_cmd_get_socket();
+void net_cmd_task();
+bool net_cmd_connected();
+int net_cmd_get_socket();
 
-#endif /* WIFI_CMD_TASK_H */
+#endif /* NET_CMD_TASK_H */

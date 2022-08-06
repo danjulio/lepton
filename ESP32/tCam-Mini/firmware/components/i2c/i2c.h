@@ -4,7 +4,7 @@
  * Provides I2C Access routines for other modules/tasks.  Provides a locking mechanism
  * since the underlying ESP IDF routines are not thread safe.
  *
- * Copyright 2020 Dan Julio
+ * Copyright 2020-2022 Dan Julio
  *
  * This file is part of tCam.
  *
@@ -45,7 +45,7 @@
 //
 // I2C API
 //
-esp_err_t i2c_master_init();
+esp_err_t i2c_master_init(int scl_pin, int sda_pin);
 void i2c_lock();
 void i2c_unlock();
 esp_err_t i2c_master_read_slave(uint8_t addr7, uint8_t *data_rd, size_t size);

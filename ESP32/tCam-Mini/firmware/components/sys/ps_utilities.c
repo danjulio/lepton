@@ -4,9 +4,12 @@
  * Manage the persistent storage kept in the ESP32 NVS and provide access
  * routines to it.
  *
- * NOTE: It is assumed that only one task will access persistent storage at a time.
+ * NOTE:
+ *  1. It is assumed that only one task will access persistent storage at a time.
+ *  2. Some internal naming is reflective of the fact that this module existed first
+ *     for a Wifi-only system with ethernet support added later.
  *
- * Copyright 2020 Dan Julio
+ * Copyright 2020-2022 Dan Julio
  *
  * This file is part of tCam.
  *
@@ -25,6 +28,7 @@
  *
  */
 #include "ps_utilities.h"
+#include "ctrl_task.h"
 #include "esp_system.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
@@ -44,8 +48,8 @@
 // Lepton state boolean flags
 #define PS_LEP_AGC_EN_MASK     0x01
 
-// Stored Wifi Flags bitmask
-#define PS_WIFI_FLAG_MASK      (WIFI_INFO_FLAG_STARTUP_ENABLE | WIFI_INFO_FLAG_CL_STATIC_IP | WIFI_INFO_FLAG_CLIENT_MODE)
+// Stored Network Flags bitmask
+#define PS_NET_FLAG_MASK      (NET_INFO_FLAG_STARTUP_ENABLE | NET_INFO_FLAG_CL_STATIC_IP | NET_INFO_FLAG_CLIENT_MODE)
 
 // NVS namespace
 #define STORAGE_NAMESPACE "storage"
@@ -63,15 +67,20 @@
 //
 
 // Stored Lepton parameters
-typedef struct ps_lep_state_t {
+typedef struct {
 	uint8_t flags;
 	uint8_t emissivity;
 	uint8_t gain_mode;
 } ps_lep_state_t;
 
 
-// Stored Wifi Parameters (strings are null-terminated)
-typedef struct ps_wifi_info_t {
+// Stored Network Parameters (strings are null-terminated)
+//   For ethernet the fields have the following meaning:
+//     ap_ssid - Camera name
+//     ap_ip_addr - Device address if it is serving DHCP addresses (stand-alone network)
+//     stap_ip_addr - Device address when it has a fixed IP address on a network
+//                    (sta_netmask applies as well)
+typedef struct {
 	char ap_ssid[PS_SSID_MAX_LEN+1];
 	char sta_ssid[PS_SSID_MAX_LEN+1];
 	char ap_pw[PS_PW_MAX_LEN+1];
@@ -80,7 +89,7 @@ typedef struct ps_wifi_info_t {
 	uint8_t ap_ip_addr[4];
 	uint8_t sta_ip_addr[4];
 	uint8_t sta_netmask[4];
-} ps_wifi_info_t;
+} ps_net_info_t;
 
 
 
@@ -92,16 +101,22 @@ static const char* TAG = "ps_utilities";
 // NVS Keys
 static const char* lep_info_key = "lep_state";
 static const char* wifi_info_key = "wifi_info";
+static const char* eth_info_key = "eth_info";
 
 // Local copies
 static ps_lep_state_t ps_lep_state;
-static ps_wifi_info_t ps_wifi_info;
+static ps_net_info_t ps_wifi_info;
+static ps_net_info_t ps_eth_info;
+
 
 // NVS namespace handle
 static nvs_handle_t ps_handle;
 
-// Serial Mode flag
-static bool serial_mode;
+// Board type (Ethernet, WiFi)
+static int brd_type;
+
+// Interface type (Ethernet, Serial, WiFi)
+static int if_type;
 
 
 
@@ -109,11 +124,11 @@ static bool serial_mode;
 // PS Utilities Forward Declarations for internal functions
 //
 static void ps_default_lep_info();
-static void ps_default_wifi_info();
+static void ps_default_net_info(int iface);
 static bool ps_write_lep_info();
 static bool ps_read_lep_info();
-static bool ps_write_wifi_info();
-static bool ps_read_wifi_info();
+static bool ps_write_net_info(int iface);
+static bool ps_read_net_info(int iface);
 static void ps_store_string(char* dst, char* src, uint8_t max_len);
 
 
@@ -127,13 +142,14 @@ static void ps_store_string(char* dst, char* src, uint8_t max_len);
  *   - Load our local buffer
  *   - Initialize it and the NVS with valid data if necessary
  */
-bool ps_init(bool ser_mode)
+bool ps_init(int brd, int iface)
 {
 	bool success = true;
 	esp_err_t err;
 	size_t required_size;
 	
-	serial_mode = ser_mode;
+	brd_type = brd;
+	if_type = iface;
 	
 	// Initialize the NVS Storage system
 	err = nvs_flash_init();
@@ -192,23 +208,44 @@ bool ps_init(bool ser_mode)
 		success &= ps_read_lep_info();
 	}
 	
-	// Wifi Info
+	// WiFi Info (common to both board types)
 	err = nvs_get_blob(ps_handle, wifi_info_key, NULL, &required_size);
 	if ((err != ESP_OK) && (err != ESP_ERR_NVS_NOT_FOUND)) {
-		ESP_LOGE(TAG, "NVS get_blob wifi size failed with err %d", err);
+		ESP_LOGE(TAG, "NVS get_blob WiFi size failed with err %d", err);
 		return false;
 	}
-	if ((required_size == 0) || (required_size != sizeof(ps_wifi_info_t))) {
+	if ((required_size == 0) || (required_size != sizeof(ps_net_info_t))) {
 		if (required_size == 0) {
-			ESP_LOGI(TAG, "Initializing NVS wifi info");
+			ESP_LOGI(TAG, "Initializing NVS WiFi info");
 		} else {
-			ESP_LOGI(TAG, "Re-initializing NVS wifi info");
+			ESP_LOGI(TAG, "Re-initializing NVS WiFi info");
 		}
-		ps_default_wifi_info();
-		success &= ps_write_wifi_info();
+		ps_default_net_info(CTRL_IF_MODE_WIFI);
+		success &= ps_write_net_info(CTRL_IF_MODE_WIFI);
 	} else {
-		ESP_LOGI(TAG, "Reading NVS wifi info");
-		success &= ps_read_wifi_info();
+		ESP_LOGI(TAG, "Reading NVS WiFi info");
+		success &= ps_read_net_info(CTRL_IF_MODE_WIFI);
+	}
+	
+	// Ethernet Info only loaded on the ethernet board type
+	if (brd_type == CTRL_BRD_ETH_TYPE) {
+		err = nvs_get_blob(ps_handle, eth_info_key, NULL, &required_size);
+		if ((err != ESP_OK) && (err != ESP_ERR_NVS_NOT_FOUND)) {
+			ESP_LOGE(TAG, "NVS get_blob ethernet size failed with err %d", err);
+			return false;
+		}
+		if ((required_size == 0) || (required_size != sizeof(ps_net_info_t))) {
+			if (required_size == 0) {
+				ESP_LOGI(TAG, "Initializing NVS ethernet info");
+			} else {
+				ESP_LOGI(TAG, "Re-initializing NVS ethernet info");
+			}
+			ps_default_net_info(CTRL_IF_MODE_ETH);
+			success &= ps_write_net_info(CTRL_IF_MODE_ETH);
+		} else {
+			ESP_LOGI(TAG, "Reading NVS ethernet info");
+			success &= ps_read_net_info(CTRL_IF_MODE_ETH);
+		}
 	}
 		
 	return success;
@@ -227,7 +264,7 @@ void ps_get_lep_state(json_config_t* state)
 void ps_set_lep_state(const json_config_t* state)
 {
 	// We don't store changes when operating in serial mode
-	if (!serial_mode) {
+	if (if_type != CTRL_IF_MODE_SIF) {
 		ps_lep_state.flags = (state->agc_set_enabled ? PS_LEP_AGC_EN_MASK : 0);	             
 		ps_lep_state.emissivity = (uint8_t) state->emissivity;
 		ps_lep_state.gain_mode = (uint8_t) state->gain_mode;
@@ -239,38 +276,55 @@ void ps_set_lep_state(const json_config_t* state)
 }
 
 
-void ps_get_wifi_info(wifi_info_t* info)
+void ps_get_net_info(net_info_t* info)
 {
 	int i;
+	ps_net_info_t* local;
+	
+	local = (if_type == CTRL_IF_MODE_ETH) ? &ps_eth_info : &ps_wifi_info;
 	
 	// Get from our local copy
-	strcpy(info->ap_ssid, (const char*) ps_wifi_info.ap_ssid);
-	strcpy(info->ap_pw, (const char*) ps_wifi_info.ap_pw);
-	strcpy(info->sta_ssid, (const char*) ps_wifi_info.sta_ssid);
-	strcpy(info->sta_pw, (const char*) ps_wifi_info.sta_pw);
+	strcpy(info->ap_ssid, (const char*) local->ap_ssid);
+	strcpy(info->ap_pw, (const char*) local->ap_pw);
+	strcpy(info->sta_ssid, (const char*) local->sta_ssid);
+	strcpy(info->sta_pw, (const char*) local->sta_pw);
 	
-	info->flags = ps_wifi_info.flags & PS_WIFI_FLAG_MASK;
+	info->flags = local->flags & PS_NET_FLAG_MASK;
 	
 	for (i=0; i<4; i++) {
-		info->ap_ip_addr[i] = ps_wifi_info.ap_ip_addr[i];
-		info->sta_ip_addr[i] = ps_wifi_info.sta_ip_addr[i];
-		info->sta_netmask[i] = ps_wifi_info.sta_netmask[i];
+		info->ap_ip_addr[i] = local->ap_ip_addr[i];
+		info->sta_ip_addr[i] = local->sta_ip_addr[i];
+		info->sta_netmask[i] = local->sta_netmask[i];
 	}
 }
 
 
-void ps_set_wifi_info(const wifi_info_t* info)
+void ps_set_net_info(const net_info_t* info)
 {
 	int i;
 	
 	// We don't store changes when operating in serial mode
-	if (!serial_mode) {
+	if (if_type == CTRL_IF_MODE_ETH) {
+		ps_store_string(ps_eth_info.ap_ssid, info->ap_ssid, PS_SSID_MAX_LEN);
+		
+		ps_eth_info.flags = info->flags & PS_NET_FLAG_MASK;
+		
+		for (i=0; i<4; i++) {
+			ps_eth_info.ap_ip_addr[i] = info->ap_ip_addr[i];
+		 	ps_eth_info.sta_ip_addr[i] = info->sta_ip_addr[i];
+		 	ps_eth_info.sta_netmask[i] = info->sta_netmask[i];
+		}
+		
+		if (!ps_write_net_info(CTRL_IF_MODE_ETH)) {
+			ESP_LOGE(TAG, "Failed to write ethernet data to NVS Storage");
+		}
+	} else if (if_type == CTRL_IF_MODE_WIFI) {
 		ps_store_string(ps_wifi_info.ap_ssid, info->ap_ssid, PS_SSID_MAX_LEN);
 		ps_store_string(ps_wifi_info.ap_pw, info->ap_pw, PS_PW_MAX_LEN);
 		ps_store_string(ps_wifi_info.sta_ssid, info->sta_ssid, PS_SSID_MAX_LEN);
 		ps_store_string(ps_wifi_info.sta_pw, info->sta_pw, PS_PW_MAX_LEN);
 		
-		ps_wifi_info.flags = info->flags & PS_WIFI_FLAG_MASK;
+		ps_wifi_info.flags = info->flags & PS_NET_FLAG_MASK;
 		
 		for (i=0; i<4; i++) {
 			ps_wifi_info.ap_ip_addr[i] = info->ap_ip_addr[i];
@@ -278,23 +332,41 @@ void ps_set_wifi_info(const wifi_info_t* info)
 		 	ps_wifi_info.sta_netmask[i] = info->sta_netmask[i];
 		}
 		
-		if (!ps_write_wifi_info()) {
+		if (!ps_write_net_info(CTRL_IF_MODE_WIFI)) {
 			ESP_LOGE(TAG, "Failed to write WiFi data to NVS Storage");
 		}
 	}
 }
 
 
-bool ps_reinit_wifi()
+bool ps_reinit_net()
 {
 	bool success;
 	
-	ESP_LOGI(TAG, "Re-initializing NVS wifi info");
-	
-	ps_default_wifi_info();
-	success = ps_write_wifi_info();
+	if ((brd_type == CTRL_BRD_ETH_TYPE) && (if_type == CTRL_IF_MODE_ETH)) {
+		ESP_LOGI(TAG, "Re-initializing NVS ethernet info");
+		ps_default_net_info(CTRL_IF_MODE_ETH);
+		success = ps_write_net_info(CTRL_IF_MODE_ETH);
+	} else {
+		ESP_LOGI(TAG, "Re-initializing NVS WiFi info");
+		ps_default_net_info(CTRL_IF_MODE_WIFI);
+		success = ps_write_net_info(CTRL_IF_MODE_WIFI);
+	}
 	
 	return success;
+}
+
+
+bool ps_has_new_cam_name(const net_info_t* info)
+{
+	if (if_type == CTRL_IF_MODE_ETH) {
+		return(strncmp(ps_eth_info.ap_ssid, info->ap_ssid, PS_SSID_MAX_LEN) != 0);
+	} else if (if_type == CTRL_IF_MODE_WIFI) {
+		return(strncmp(ps_wifi_info.ap_ssid, info->ap_ssid, PS_SSID_MAX_LEN) != 0);
+	} else {
+		// Shouldn't ever see this for serial mode but return something anyway
+		return false;
+	}
 }
 
 
@@ -327,45 +399,61 @@ static void ps_default_lep_info()
 }
 
 
-static void ps_default_wifi_info()
+static void ps_default_net_info(int iface)
 {
 	int i;
 	uint8_t sys_mac_addr[6];
+	ps_net_info_t* local;
 	
-	// Wifi parameters
+	local = (iface == CTRL_IF_MODE_ETH) ? &ps_eth_info : &ps_wifi_info;
+	
+	// Network parameters
 	//
-	// Get the system's default MAC address and add 1 to match the "Soft AP" mode
+	// Get the system's default MAC address and 
+	//   - For WiFi add 1 to match the "Soft AP" mode
+	//   - For Ethernet add 3 to match the ethernet MAC
 	// (see "Miscellaneous System APIs" in the ESP-IDF documentation)
 	esp_efuse_mac_get_default(sys_mac_addr);
-	sys_mac_addr[5] = sys_mac_addr[5] + 1;
+	if (iface == CTRL_IF_MODE_ETH) {
+		sys_mac_addr[5] = sys_mac_addr[5] + 3;
+	} else {
+		sys_mac_addr[5] = sys_mac_addr[5] + 1;
+	}
 	
 	// Construct our default AP SSID/Camera name
-	for (i=0; i<PS_SSID_MAX_LEN+1; i++) {
-		ps_wifi_info.ap_ssid[i] = 0;
-		ps_wifi_info.ap_pw[i] = 0;
-		ps_wifi_info.sta_ssid[i] = 0;
-		ps_wifi_info.sta_pw[i] = 0;
-	}
-	sprintf(ps_wifi_info.ap_ssid, "%s%c%c%c%c", PS_DEFAULT_AP_SSID,
+	sprintf(local->ap_ssid, "%s%c%c%c%c", PS_DEFAULT_AP_SSID,
 		    ps_nibble_to_ascii(sys_mac_addr[4] >> 4),
 		    ps_nibble_to_ascii(sys_mac_addr[4]),
 		    ps_nibble_to_ascii(sys_mac_addr[5] >> 4),
 	 	    ps_nibble_to_ascii(sys_mac_addr[5]));
+	 	    
+	// Other text fields start empty
+	for (i=0; i<PS_SSID_MAX_LEN+1; i++) {
+		local->ap_pw[i] = 0;
+		local->sta_ssid[i] = 0;
+		local->sta_pw[i] = 0;
+	}
 	
-	ps_wifi_info.flags = WIFI_INFO_FLAG_STARTUP_ENABLE;
+	// Network is always enabled to start
+	local->flags = NET_INFO_FLAG_STARTUP_ENABLE;
 	
-	ps_wifi_info.ap_ip_addr[3] = 192;
-	ps_wifi_info.ap_ip_addr[2] = 168;
-	ps_wifi_info.ap_ip_addr[1] = 4;
-	ps_wifi_info.ap_ip_addr[0] = 1;
-	ps_wifi_info.sta_ip_addr[3] = 192;
-	ps_wifi_info.sta_ip_addr[2] = 168;
-	ps_wifi_info.sta_ip_addr[1] = 4;
-	ps_wifi_info.sta_ip_addr[0] = 2;
-	ps_wifi_info.sta_netmask[3] = 255;
-	ps_wifi_info.sta_netmask[2] = 255;
-	ps_wifi_info.sta_netmask[1] = 255;
-	ps_wifi_info.sta_netmask[0] = 0;
+	// Ethernet is configured to be a DHCP-served client
+	if (iface == CTRL_IF_MODE_ETH) {
+		local->flags |= NET_INFO_FLAG_CLIENT_MODE;
+	}
+	
+	local->ap_ip_addr[3] = 192;
+	local->ap_ip_addr[2] = 168;
+	local->ap_ip_addr[1] = 4;
+	local->ap_ip_addr[0] = 1;
+	local->sta_ip_addr[3] = 192;
+	local->sta_ip_addr[2] = 168;
+	local->sta_ip_addr[1] = 4;
+	local->sta_ip_addr[0] = 2;
+	local->sta_netmask[3] = 255;
+	local->sta_netmask[2] = 255;
+	local->sta_netmask[1] = 255;
+	local->sta_netmask[0] = 0;
 }
 
 
@@ -403,7 +491,7 @@ static bool ps_read_lep_info()
 		return false;
 	}
 	if (required_size != sizeof(ps_lep_state_t)) {
-		ESP_LOGE(TAG, "Get lep info blob incorrect size %d (expected %d)", required_size, sizeof(ps_wifi_info_t));
+		ESP_LOGE(TAG, "Get lep info blob incorrect size %d (expected %d)", required_size, sizeof(ps_net_info_t));
 		return false;
 	}
 	
@@ -411,21 +499,25 @@ static bool ps_read_lep_info()
 }
 
 
-static bool ps_write_wifi_info()
+static bool ps_write_net_info(int iface)
 {
 	size_t required_size;
 	esp_err_t err;
 	
-	required_size = sizeof(ps_wifi_info_t);
-	err = nvs_set_blob(ps_handle, wifi_info_key, &ps_wifi_info, required_size);
+	required_size = sizeof(ps_net_info_t);
+	if (iface == CTRL_IF_MODE_ETH) {
+		err = nvs_set_blob(ps_handle, eth_info_key, &ps_eth_info, required_size);
+	} else {
+		err = nvs_set_blob(ps_handle, wifi_info_key, &ps_wifi_info, required_size);
+	}
 	if (err != ESP_OK) {
-		ESP_LOGE(TAG, "Set wifi info blob failed with %d", err);
+		ESP_LOGE(TAG, "Set network info blob failed with %d", err);
 		return false;
 	}
 	
 	err = nvs_commit(ps_handle);
 	if (err != ESP_OK) {
-		ESP_LOGE(TAG, "Commit wifi info failed with %d", err);
+		ESP_LOGE(TAG, "Commit network info failed with %d", err);
 		return false;
 	}
 	
@@ -433,19 +525,23 @@ static bool ps_write_wifi_info()
 }
 
 
-static bool ps_read_wifi_info()
+static bool ps_read_net_info(int iface)
 {
 	size_t required_size;
 	esp_err_t err;
 	
-	required_size = sizeof(ps_wifi_info_t);
-	err = nvs_get_blob(ps_handle, wifi_info_key, &ps_wifi_info, &required_size);
+	required_size = sizeof(ps_net_info_t);
+	if (iface == CTRL_IF_MODE_ETH) {
+		err = nvs_get_blob(ps_handle, eth_info_key, &ps_eth_info, &required_size);
+	} else {
+		err = nvs_get_blob(ps_handle, wifi_info_key, &ps_wifi_info, &required_size);
+	}
 	if (err != ESP_OK) {
-		ESP_LOGE(TAG, "Get wifi info blob failed with %d", err);
+		ESP_LOGE(TAG, "Get network info blob failed with %d", err);
 		return false;
 	}
-	if (required_size != sizeof(ps_wifi_info_t)) {
-		ESP_LOGE(TAG, "Get wifi info blob incorrect size %d (expected %d)", required_size, sizeof(ps_wifi_info_t));
+	if (required_size != sizeof(ps_net_info_t)) {
+		ESP_LOGE(TAG, "Get network info blob incorrect size %d (expected %d)", required_size, sizeof(ps_net_info_t));
 		return false;
 	}
 	

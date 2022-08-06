@@ -6,7 +6,7 @@
  * interface.  This task should be run on the "PRO" core (0) while other application
  * tasks run on the "PRO" core (1).
  *
- * Copyright 2020 Dan Julio
+ * Copyright 2020-2022 Dan Julio
  *
  * This file is part of tCam.
  *

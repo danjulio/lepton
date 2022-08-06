@@ -1,9 +1,9 @@
 /*
- * WiFi related utilities
+ * Ethernet related utilities
  *
- * Contains functions to initialize and query the wifi interface.
+ * Contains functions to initialize and query the ethernet interface.
  *
- * Copyright 2020-2022 Dan Julio
+ * Copyright 2022 Dan Julio
  *
  * This file is part of tCam.
  *
@@ -21,27 +21,25 @@
  * along with tCam.  If not, see <https://www.gnu.org/licenses/>.
  *
  */
-#ifndef WIFI_UTILITIES_H
-#define WIFI_UTILITIES_H
+#ifndef ETH_UTILITIES_H
+#define ETH_UTILITIES_H
 
 #include <stdbool.h>
 #include <stdint.h>
 #include "net_utilities.h"
 
 //
-// WiFi Utilities Constants
+// Ethernet Utilities Constants
 //
 
-// Maximum attempts to reconnect to an AP in client mode before starting to wait
-#define WIFI_FAST_RECONNECT_ATTEMPTS  10
 
 
 //
-// WiFi Utilities API
+// Ethernet Utilities API
 //
-bool wifi_init();
-bool wifi_reinit();
-bool wifi_is_connected();
-net_info_t* wifi_get_info();
+bool eth_init();
+bool eth_reinit();
+bool eth_is_connected();
+net_info_t* eth_get_info();
 
-#endif /* WIFI_UTILITIES_H */
+#endif /* ETH_UTILITIES_H */

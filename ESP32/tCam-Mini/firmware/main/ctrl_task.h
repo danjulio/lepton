@@ -2,10 +2,10 @@
  * Control Interface Task
  *
  * Manage user controls:
- *   WiFi Reset Button
+ *   Ethernet/WiFi Reset Button
  *   Red/Green Dual Status LED
  *
- * Copyright 2020 Dan Julio
+ * Copyright 2020-2022 Dan Julio
  *
  * This file is part of tCam.
  *
@@ -34,7 +34,7 @@
 //
 
 // Control Task evaluation interval
-#define CTRL_EVAL_MSEC           50
+#define CTRL_EVAL_MSEC             50
 
 // Timeouts (multiples of CTRL_EVAL_MSEC)
 #define CTRL_BTN_PRESS_MSEC        5000
@@ -57,6 +57,15 @@
 #define CTRL_FAULT_LEP_SYNC       7
 #define CTRL_FAULT_FW_UPDATE      8
 
+// Board type
+#define CTRL_BRD_ETH_TYPE         0
+#define CTRL_BRD_WIFI_TYPE        1
+
+// Interface mode
+#define CTRL_IF_MODE_ETH          0
+#define CTRL_IF_MODE_SIF          1
+#define CTRL_IF_MODE_WIFI         2
+
 // Control Task notifications
 #define CTRL_NOTIFY_STARTUP_DONE      0x00000001
 #define CTRL_NOTIFY_FAULT             0x00000002
@@ -71,7 +80,7 @@
 // Control Task API
 //
 void ctrl_task();
-bool ctrl_get_ser_mode();
+void ctrl_get_if_mode(int* brd, int* iface);
 void ctrl_set_fault_type(int f);
 
 #endif /* CTRL_TASK_H */

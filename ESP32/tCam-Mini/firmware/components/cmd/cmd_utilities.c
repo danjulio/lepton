@@ -3,7 +3,7 @@
  *
  * Includes functions to decode and execute commands.
  *
- * Copyright 2020-2021 Dan Julio
+ * Copyright 2020-2022 Dan Julio
  *
  * This file is part of tCam.
  *
@@ -27,17 +27,18 @@
 #include "rsp_task.h"
 #include "json_utilities.h"
 #include "lepton_utilities.h"
+#include "net_utilities.h"
 #include "ps_utilities.h"
 #include "sys_utilities.h"
 #include "time_utilities.h"
 #include "upd_utilities.h"
-#include "wifi_utilities.h"
 #include "system_config.h"
 #include "esp_system.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
+#include "mdns.h"
 
 
 //
@@ -213,11 +214,11 @@ static void process_rx_packet()
 					
 				case CMD_SET_WIFI:
 					if (process_set_wifi(cmd_args)) {
-						if (wifi_reinit()) {
+						if ((*net_reinit)()) {
 							cmd_success = 1;
 						} else {
-							ESP_LOGE(TAG, "Could not restart WiFi with the new configuration");
-							rsp_set_cam_info_msg(RSP_INFO_CMD_NACK, "Could not restart WiFi with the new configuration");
+							ESP_LOGE(TAG, "Could not restart network with the new configuration");
+							rsp_set_cam_info_msg(RSP_INFO_CMD_NACK, "Could not restart network with the new configuration");
 						}
 					} else {
 						cmd_success = 2;
@@ -302,6 +303,7 @@ static void process_rx_packet()
 				case CMD_GET_FS_LIST:
 				case CMD_GET_FS_FILE:
 				case CMD_DEL_FS_OBJ:
+				case CMD_DUMP_SCREEN:
 					cmd_success = 3;
 					break;
 				
@@ -454,7 +456,8 @@ static bool process_set_wifi(cJSON* cmd_args)
 	char sta_ssid[PS_SSID_MAX_LEN+1];
 	char ap_pw[PS_PW_MAX_LEN+1];
 	char sta_pw[PS_PW_MAX_LEN+1];
-	wifi_info_t new_wifi_info;
+	esp_err_t ret;
+	net_info_t new_wifi_info;
 	
 	new_wifi_info.ap_ssid = ap_ssid;
 	new_wifi_info.sta_ssid = sta_ssid;
@@ -462,7 +465,16 @@ static bool process_set_wifi(cJSON* cmd_args)
 	new_wifi_info.sta_pw = sta_pw;
 	
 	if (json_parse_set_wifi(cmd_args, &new_wifi_info)) {
-		ps_set_wifi_info(&new_wifi_info);
+		// Update the mDNS server if we got a new name (ap_ssid)
+		if (ps_has_new_cam_name(&new_wifi_info)) {
+			ret = mdns_hostname_set(ap_ssid);
+			if (ret != ESP_OK) {
+				ESP_LOGE(TAG, "Could not set new mDNS hostname %s (%d)", ap_ssid, ret);
+			}
+		}
+		
+		// Then update persistent storage
+		ps_set_net_info(&new_wifi_info);
 		return true;
 	}
 	

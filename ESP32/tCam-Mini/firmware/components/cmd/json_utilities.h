@@ -12,7 +12,7 @@
  * Be sure to read the requirements about freeing allocated buffers or objects in
  * the function description.  Or BOOM.
  *
- * Copyright 2020-2021 Dan Julio
+ * Copyright 2020-2022 Dan Julio
  *
  * This file is part of tCam.
  *
@@ -34,8 +34,8 @@
 #define JSON_UTILITIES_H
 
 #include "ds3232.h"
+#include "net_utilities.h"
 #include "sys_utilities.h"
-#include "wifi_utilities.h"
 #include <stdbool.h>
 #include <stdint.h>
 #include "cJSON.h"
@@ -58,7 +58,7 @@ bool json_parse_cmd(cJSON* cmd_obj, int* cmd, cJSON** cmd_args);
 bool json_parse_set_config(cJSON* cmd_args, json_config_t* new_st);
 bool json_parse_set_spotmeter(cJSON* cmd_args, uint16_t* r1, uint16_t* c1, uint16_t* r2, uint16_t* c2);
 bool json_parse_set_time(cJSON* cmd_args, tmElements_t* te);
-bool json_parse_set_wifi(cJSON* cmd_args, wifi_info_t* new_wifi_info);
+bool json_parse_set_wifi(cJSON* cmd_args, net_info_t* new_net_info);
 bool json_parse_stream_on(cJSON* cmd_args, uint32_t* delay_ms, uint32_t* num_frames);
 bool json_parse_get_lep_cci(cJSON* cmd_args, uint16_t* cmd, int* len, uint16_t** buf);
 bool json_parse_set_lep_cci(cJSON* cmd_args, uint16_t* cmd, int* len, uint16_t** buf);

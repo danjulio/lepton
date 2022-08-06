@@ -5,7 +5,7 @@
  * Optionally supports collecting telemetry when enabled as a footer (does not
  * support telemetry enabled as a header). 
  *
- * Copyright 2020 Dan Julio
+ * Copyright 2020-2022 Dan Julio
  *
  * This file is part of tCam.
  *
@@ -69,7 +69,7 @@ enum LeptonReadError {
 //
 // VoSPI API
 //
-int vospi_init();
+int vospi_init(int csn_pin);
 bool vospi_transfer_segment(uint64_t vsyncDetectedUsec);
 void vospi_get_frame(lep_buffer_t* sys_bufP);
 void vospi_include_telem(bool en);

@@ -4,7 +4,7 @@
  * Contains functions to initialize the system, other utility functions, a set
  * of globally available handles for the various tasks (to use for task notifications).
  *
- * Copyright 2020 Dan Julio
+ * Copyright 2020-2022 Dan Julio
  *
  * This file is part of tCam.
  *
@@ -123,12 +123,12 @@ extern uint8_t fw_upd_segment[];                          // Loaded by cmd_utili
 //
 // System Utilities API
 //
-bool system_esp_io_init(bool ser_mode);
-bool system_peripheral_init(bool ser_mode);
+bool system_esp_io_init(int brd_type, int if_mode);
+bool system_peripheral_init(int brd_type, int if_mode);
 bool system_buffer_init();
 bool system_config_spi_slave(char* buf, int len);
 bool system_spi_slave_busy();
-void system_spi_wait_done();
+bool system_spi_wait_done();
 
 #define system_get_lep_st()   (&lep_st)
  

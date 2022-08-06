@@ -3,7 +3,7 @@
  *
  * Includes functions to decode and execute commands.
  *
- * Copyright 2020-2021 Dan Julio
+ * Copyright 2020-2022 Dan Julio
  *
  * This file is part of tCam.
  *
@@ -56,8 +56,10 @@
 #define CMD_SET_LEP_CCI 19
 #define CMD_FW_UPD_REQ  20
 #define CMD_FW_UPD_SEG  21
-#define CMD_UNKNOWN     22
+#define CMD_DUMP_SCREEN 22
 #define CMD_NUM         23
+
+#define CMD_UNKNOWN     999
 
 // Command strings
 #define CMD_GET_STATUS_S "get_status"
@@ -82,6 +84,7 @@
 #define CMD_SET_LEP_CCI_S "set_lep_cci"
 #define CMD_FW_UPD_REQ_S  "fw_update_request"
 #define CMD_FW_UPD_SEG_S  "fw_segment"
+#define CMD_DUMP_SCREEN_S "dump_screen"
 
 
 // Delimiters used to wrap json strings sent over the network

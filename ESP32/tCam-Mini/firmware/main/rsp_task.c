@@ -5,7 +5,7 @@
  * Responsible for sending responses to the connected client.  Sources of responses
  * include the command task, lepton task and file task.
  *
- * Copyright 2020-2021 Dan Julio
+ * Copyright 2020-2022 Dan Julio
  *
  * This file is part of tCam.
  *
@@ -23,8 +23,8 @@
  * along with tCam.  If not, see <https://www.gnu.org/licenses/>.
  *
  */
+#include "net_cmd_task.h"
 #include "sif_cmd_task.h"
-#include "wifi_cmd_task.h"
 #include "ctrl_task.h"
 #include "lep_task.h"
 #include "rsp_task.h"
@@ -107,7 +107,7 @@ static int fw_seg_length;
 static void init_state();
 static void eval_stream_ready();
 static void handle_notifications();
-static int process_image(int n, bool ser_mode);
+static int process_image(int n);
 static void send_response(char* rsp, int len, bool ser_mode);
 static bool cmd_response_available();
 static int get_cmd_response();
@@ -122,8 +122,9 @@ static void send_get_fw();
 //
 void rsp_task()
 {
-	bool ser_mode;
 	int len;
+	int brd_type;
+	int if_type;
 	
 	ESP_LOGI(TAG, "Start task");
 	
@@ -132,7 +133,7 @@ void rsp_task()
 	//
 	init_state();
 	
-	ser_mode = ctrl_get_ser_mode();
+	ctrl_get_if_mode(&brd_type, &if_type);
 	
 	cam_info_mutex = xSemaphoreCreateMutex();
 	
@@ -150,10 +151,10 @@ void rsp_task()
 		handle_notifications();
 		
 		// Get our current wifi connection state if necessary
-		if (ser_mode) {
+		if (if_type == CTRL_IF_MODE_SIF) {
 			connected = true;
 		} else {
-			if (wifi_cmd_connected()) {
+			if (net_cmd_connected()) {
 				connected = true;
 			} else if (connected) {
 				// Clear our state since we are no longer connected
@@ -165,13 +166,13 @@ void rsp_task()
 		if (got_image_0 || got_image_1) {
 			if (connected) {
 				if (got_image_0) {
-					len = process_image(0, ser_mode);
+					len = process_image(0);
 					got_image_0 = false;
 #ifdef LOG_IMG_TIMESTAMP
 					ESP_LOGI(TAG, "process image 0");
 #endif
 				} else {
-					len = process_image(1, ser_mode);
+					len = process_image(1);
 					got_image_1 = false;
 #ifdef LOG_IMG_TIMESTAMP
 					ESP_LOGI(TAG, "process image 1");
@@ -180,7 +181,7 @@ void rsp_task()
 					
 				// Send the image
 				if (len != 0) {
-					if (ser_mode) {
+					if (if_type == CTRL_IF_MODE_SIF) {
 						// Configure a SPI slave response if the slave is available,
 						// otherwise drop the response
 						if (!system_spi_slave_busy()) {
@@ -204,7 +205,7 @@ void rsp_task()
 			// Get the command response and send it if possible
 			len = get_cmd_response();
 			if (connected && (len != 0)) {
-				send_response(cmd_task_response_buffer, len, ser_mode);
+				send_response(cmd_task_response_buffer, len, (if_type == CTRL_IF_MODE_SIF));
 			}
 		}
 		
@@ -253,7 +254,6 @@ void rsp_set_stream_parameters(uint32_t delay_ms, uint32_t num_frames)
 }
 
 
-// Called before sending RSP_NOTIFY_CAM_INFO_MASK
 void rsp_set_cam_info_msg(uint32_t info_value, char* info_string)
 {
 	int i;
@@ -510,7 +510,7 @@ static void handle_notifications()
  * Convert lepton data in the specified half of the ping-pong buffer into a json record
  * with delimitors for transmission over the network
  */
-static int process_image(int n, bool ser_mode)
+static int process_image(int n)
 {
 #ifdef LOG_PROC_TIMESTAMP
 	int64_t tb, te;
@@ -564,7 +564,7 @@ static void send_response(char* rsp, int rsp_length, bool ser_mode)
 #endif
 		sif_send(rsp, rsp_length);
 	} else {
-		sock = wifi_cmd_get_socket();
+		sock = net_cmd_get_socket();
 		
 		// Write our response to the socket
     	byte_offset = 0;
@@ -662,6 +662,10 @@ static void send_spi_image(char* rsp, int rsp_length)
 	char* eP;
 	int dma_length;
 	uint32_t cs;
+	static bool enabled = true;
+	
+	// Skip sending any images if the SPI Slave is no longer running
+	if (!enabled) return;
 	
 	// Compute a 32-bit checksum (32-bit sum of all bytes in the image string)
 	// and add it to the end of the image
@@ -696,9 +700,22 @@ static void send_spi_image(char* rsp, int rsp_length)
 		send_response(cmd_task_response_buffer, strlen(cmd_task_response_buffer), true);
 		
 		// Wait for the SPI Slave to complete transferring the data
-		system_spi_wait_done();
+		if (!system_spi_wait_done()) {
+			// Something went wrong with the SPI Slave - probably a timeout and
+			// we couldn't successfully reset it.  So we disable its use and
+			// attempt to let our user about the failure.
+			enabled = false;
+			ESP_LOGE(TAG, "SPI Slave restart error");
+			rsp_set_cam_info_msg(RSP_INFO_INT_ERROR, "SPI Slave restart error - images disabled");
+			ctrl_set_fault_type(CTRL_FAULT_NETWORK);
+			xTaskNotify(task_handle_ctrl, CTRL_NOTIFY_FAULT, eSetBits);
+		}
 	} else {
+		enabled = false;
 		ESP_LOGE(TAG, "Setup SPI Slave failed");
+		rsp_set_cam_info_msg(RSP_INFO_INT_ERROR, "Setup SPI Slave failed - images disabled");
+		ctrl_set_fault_type(CTRL_FAULT_NETWORK);
+		xTaskNotify(task_handle_ctrl, CTRL_NOTIFY_FAULT, eSetBits);
 	}
 }
 

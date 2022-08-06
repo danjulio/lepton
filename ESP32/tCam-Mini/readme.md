@@ -5,12 +5,26 @@ tCam-Mini was created using code from the tCam project and ended up being finish
 
 (image courtesy of Group Gets)
 
-Revision 4 of the PCB, along with FW 2.0, introduces a new hardware expansion port that can be used by an external micro-controller or single-board computer to communicate with tCam-Mini directly instead of using WiFi.  It also has an I2C expansion port that is currently unused, a USB-C connector and surface-mount LED.
+Revision 4 of the PCB, along with FW 2.0 and beyond, introduces a new hardware expansion port that can be used by an external micro-controller or single-board computer to communicate with tCam-Mini directly instead of using WiFi.  It also has an I2C expansion port that is currently unused, a USB-C connector and surface-mount LED.
 
 ### Firmware
 The "Firmware" directory contains a V4.0.2 Espressif ESP32 IDF project for tCam-Mini. You should be able to build and load it into a camera using the IDF commands (I still use "make program monitor").  There are also a set of precompiled binaries in the "precompiled" sub-directory.  You can use the Espressif tool and instructions found in the "programming" directory in parallel to this one to load those into a camera without having to build the project.
 
-Note: The precompiled firmware and Windows-based programming application can be downloaded directly from my [website](http://danjuliodesigns.com/products/tcam_mini.html) as well if you don't want to clone this entire repository.
+The precompiled firmware and Windows-based programming application can be downloaded directly from my [website](http://danjuliodesigns.com/products/tcam_mini.html) as well if you don't want to clone this entire repository.
+
+Cameras running FW 2.0 and beyond can also use the over-the-air update capability in the Desktop application to load new firmware files.
+
+#### FW 3.0 (8/6/2022)
+FW revison 3.0 is a major new release.  It is designed to run on tCam-Mini and tCam-POE PCBs with Revison 3 silicon and 8 MB Flash memory).
+
+1. Support tCam-POE board
+2. Optimize flash reads for improved performance
+3. Added mDNS for camera discovery
+4. Changed model usage to support tCam-POE (model 2 is for tCam-Mini board, model 3 is for tCam-POE board)
+5. Added Interface Type flags to model number
+6. Add timeout to SPI slave read
+7. Blink error LED if SPI Slave fails
+8. Fix bug where unknown json command would crash camera
 
 #### FW 2.1 (2/5/2022)
 FW revision 2.1 fixes the following issues.  It is designed to run on the tCam-Mini PCBs with Revision 3 silicon and 8 MB Flash memory (camera's built using Revision 1 silicon or less than 8 MB Flash memory should use FW revision 1.3).  It fixes an issue where setting a password of less than 8 characters would brick the tCam-Mini (requiring reload of firmware using the Windows utility).
@@ -95,11 +109,20 @@ The serial port (running at 230,400 baud) is used to send and receive commands a
 
 The slave SPI port is partially handled by a driver running on the ESP32.  For this reason the highest supported clock rate is 8 MHz.  Too fast and the ESP32 slave SPI driver can't keep up.  I found success running the interface at 7 MHz.
 
+#### mDNS Discovery
+The cameras advertise themselves on the local network using mDNS (Bonjour) starting with firmware revision 3.0 to make discovering their IPV4 addresses easier.
+
+* Service Type: "\_tcam-socket._tcp."
+* Host/Instance Name: Camera Name (e.g. "tCam-Mini-87E9")
+* TXT Records:
+	1. "model": Camera model (e.g. "tCam", "tCam-Mini", "tCam-POE")
+	2. "interface": Communication interface (e.g. "Ethernet", "WiFi")
+	3. "version": Firmware version (e.g. "3.0")
 
 ### Command Interface
 The camera is capable of executing a set of commands and generating responses or sending image data when connected to a remote computer via one of the interfaces.  It can support one remote connection at a time.  Commands and responses are encoded as json-structured strings.  The command interface exists as a TCP/IP socket at port 5001 when using WiFi.
 
-Each json command or response is delimited by two characters.  A Start delimiter (value 0x02) precedes the json string.  An End delimiter (value 0x03) follows the json string.  The json string may be tightly packed or may contain white space.
+Each json command or response is delimited by two characters.  A Start delimiter (8-bit value 0x02) precedes the json string.  An End delimiter (8-bit value 0x03) follows the json string.  The json string may be tightly packed or may contain white space.
 
 ```<0x02><json string><0x03>```
 
@@ -168,9 +191,15 @@ The get_status response may include additional information for other camera mode
 | 18 | Supports over-the-air FW updates |
 | 17 | Has Filesystem Flag |
 | 16 | Has Battery Flag |
-| 15:9 | Reserved - Read as 0 |
+| 15:14 | Reserved - Read as 0 |
+| 13:12 | Interface Type (FW 3.0 and beyond) |
+| | 0 0 - WiFi Interface |
+| | 0 1 - Hardware Interface (Serial/SPI Interface) |
+| | 1 0 - Ethernet Interface (tCam-POE only) |
+| | 1 1 - Reserved |
+| 9 | Reserved - Read as 0 |
 | 8 | Non-radiometric Lepton installed (FW 2.0 and beyond) |
-| 7:0 | Camera Model Number - tCam-Mini reports 2 when using the WiFI interface and 3 when using the Hardware interface |
+| 7:0 | Camera Model Number - tCam-Mini reports 2 |
 
 #### get_image
 ```{"cmd":"get_image"}```

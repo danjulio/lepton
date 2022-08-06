@@ -3,7 +3,7 @@
  *
  * Contains system definition and configurable items.
  *
- * Copyright 2020-2021 Dan Julio
+ * Copyright 2020-2022 Dan Julio
  *
  * This file is part of tCam.
  *
@@ -27,6 +27,7 @@
 #include "esp_system.h"
 
 
+
 // ======================================================================================
 // System debug
 //
@@ -42,29 +43,73 @@
 
 //
 // IO Pins
+//   Pin allocation is dependent on board type (Ethernet or WiFi/Serial)
+//   due to some dedicated pins for ethernet.  Pins for non-existent functions
+//   set to -1 since they will not be used.
+
+// Board sense pin - pulled high with internal pull-up
+//   0 - Ethernet board
+//   1 - Wifi/Serial board
 //
-#define BTN_IO            0
-#define RED_LED_IO        14
-#define GREEN_LED_IO      15
+// Mode sense pin
+//   Ethernet board (pulled high w/ external resistor) - 0: Ethernet, 1: Wifi
+//   Wifi/Serial board (internal pull-up) - 0: Serial, 1: Wifi
+//
+#define BOARD_SENSE_IO          2
 
-#define LEP_SCK_IO        5
-#define LEP_CSN_IO        12
-#define LEP_VSYNC_IO      13
-#define LEP_MISO_IO       19
-#define LEP_RESET_IO      21
+// Ethernet board pins
+#define BRD_E_MODE_SENSE_IO     39
 
-#define I2C_MASTER_SDA_IO 23
-#define I2C_MASTER_SCL_IO 22
+#define BRD_E_BTN_IO            36  /* requires external pull-up */
+#define BRD_E_RED_LED_IO        14
+#define BRD_E_GREEN_LED_IO      15
 
-#define MODE_SENSE_IO     32
+#define BRD_E_LEP_SCK_IO        12
+#define BRD_E_LEP_CSN_IO        13
+#define BRD_E_LEP_VSYNC_IO      35
+#define BRD_E_LEP_MISO_IO       34
+#define BRD_E_LEP_RESET_IO      4
 
-#define SIF_RX_IO         26
-#define SIF_TX_IO         27
+#define BRD_E_I2C_MASTER_SDA_IO 32
+#define BRD_E_I2C_MASTER_SCL_IO 33
 
-#define HOST_SCK_IO       34
-#define HOST_MISO_IO      33
-#define HOST_CSN_IO       35
+#define BRD_E_SIF_RX_IO         -1
+#define BRD_E_SIF_TX_IO         -1
 
+#define BRD_E_HOST_SCK_IO       -1
+#define BRD_E_HOST_MISO_IO      -1
+#define BRD_E_HOST_CSN_IO       -1
+
+#define BRD_E_ETH_MDC           23
+#define BRD_E_ETH_MDIO          18
+#define BRD_E_PHY_RESET         5
+
+// Wifi/Serial board pins
+#define BRD_W_MODE_SENSE_IO     32
+
+#define BRD_W_BTN_IO            0
+#define BRD_W_RED_LED_IO        14
+#define BRD_W_GREEN_LED_IO      15
+
+#define BRD_W_LEP_SCK_IO        5
+#define BRD_W_LEP_CSN_IO        12
+#define BRD_W_LEP_VSYNC_IO      13
+#define BRD_W_LEP_MISO_IO       19
+#define BRD_W_LEP_RESET_IO      21
+
+#define BRD_W_I2C_MASTER_SDA_IO 23
+#define BRD_W_I2C_MASTER_SCL_IO 22
+
+#define BRD_W_SIF_RX_IO         26
+#define BRD_W_SIF_TX_IO         27
+
+#define BRD_W_HOST_SCK_IO       34
+#define BRD_W_HOST_MISO_IO      33
+#define BRD_W_HOST_CSN_IO       35
+
+#define BRD_W_ETH_MDC           -1
+#define BRD_W_ETH_MDIO          -1
+#define BRD_W_PHY_RESET         -1
 
 
 
@@ -87,6 +132,14 @@
 #define HOST_DMA_NUM    1
 #define HOST_SPI_MODE   0
 
+// Ethernet PHY
+#define ETH_PHY_ADDRESS 1
+
+// Uncomment one selection for the specific PHY chip
+#define ETH_PHY_IP101
+//#define ETH_PHY_RTL8201
+//#define ETH_PHY_LAN8720
+//#define ETH_PHY_DP83848
 
 
 
@@ -95,18 +148,27 @@
 //
 
 // Camera model number
-//  1. tCam Mini using the WiFi interface is model 2
-//  2. tCam Mini using the Serial/SPI interface is model 3
+//  1. tCam Mini using the WiFi board is model 2
+//  3. tCam Mini using the Ethernet board is model 3
 #define CAMERA_MODEL_NUM_WIFI 2
-#define CAMERA_MODEL_NUM_SIF  3
+#define CAMERA_MODEL_NUM_ETH  3
 
 // tCam capabilities mask 
-//   Bit  8: Non-radiometric (set during run-time)
-//   Bit 16: Has Battery (not set)
-//   Bit 17: Has Filesystem (not set)
-//   Bit 18: Has OTA Firmware Updates (set)
-#define CAMERA_CAP_MASK_RAD     0x00040000
-#define CAMERA_CAP_MASK_NONRAD  0x00040100
+//   Bit     8: Non-radiometric (set during run-time)
+//   Bit 13:12: Interface Type
+//        0  0 - WiFi
+//        0  1 - Serial/SPI interface
+//        1  0 - Ethernet
+//        1  1 - Reserved
+//   Bit    16: Has Battery (not set)
+//   Bit    17: Has Filesystem (not set)
+//   Bit    18: Has OTA Firmware Updates (set)
+#define CAMERA_CAP_MASK_CORE    0x00040000
+#define CAMERA_CAP_MASK_IF_WIFI 0x00000000
+#define CAMERA_CAP_MASK_IF_SIF  0x00001000
+#define CAMERA_CAP_MASK_IF_ETH  0x00002000
+#define CAMERA_CAP_MASK_RAD     0x00000000
+#define CAMERA_CAP_MASK_NONRAD  0x00000100
 
 
 // Image (Lepton + Telemetry + Metadata) json object text size

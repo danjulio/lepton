@@ -3,7 +3,7 @@
  *
  * Contains the functions to configure the Lepton via I2C.
  *
- * Copyright 2020 Dan Julio
+ * Copyright 2020-2022 Dan Julio
  *
  * This file is part of tCam.
  *
@@ -641,8 +641,8 @@ uint32_t cci_get_gpio_mode()
 	xSemaphoreTake(cci_mutex, portMAX_DELAY);
 	cci_wait_busy_clear();
 	cci_write_register(CCI_REG_DATA_LENGTH, 2);
- 	cci_write_register(CCI_REG_COMMAND, CCI_CMD_OEM_SET_GPIO_MODE);
-	cci_wait_busy_clear_check("CCI_CMD_OEM_SET_GPIO_MODE");
+ 	cci_write_register(CCI_REG_COMMAND, CCI_CMD_OEM_GET_GPIO_MODE);
+	cci_wait_busy_clear_check("CCI_CMD_OEM_GET_GPIO_MODE");
 	xSemaphoreGive(cci_mutex);
 	
 	uint16_t ls_word = cci_read_register(CCI_REG_DATA_0);

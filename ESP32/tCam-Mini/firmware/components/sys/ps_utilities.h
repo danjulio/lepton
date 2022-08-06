@@ -4,9 +4,12 @@
  * Manage the persistent storage kept in the ESP32 NVS and provide access
  * routines to it.
  *
- * NOTE: It is assumed that only task will access persistent storage at a time.
+ * NOTE:
+ *  1. It is assumed that only one task will access persistent storage at a time.
+ *  2. Some internal naming is reflective of the fact that this module existed first
+ *     for a Wifi-only system with ethernet support added later.
  *
- * Copyright 2020 Dan Julio
+ * Copyright 2020-2022 Dan Julio
  *
  * This file is part of tCam.
  *
@@ -27,8 +30,8 @@
 #ifndef PS_UTILITIES_H
 #define PS_UTILITIES_H
 
+#include "net_utilities.h"
 #include "sys_utilities.h"
-#include "wifi_utilities.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -51,12 +54,13 @@
 //
 // PS Utilities API
 //
-bool ps_init(bool ser_mode);
+bool ps_init(int brd, int iface);
 void ps_get_lep_state(json_config_t* state);
 void ps_set_lep_state(const json_config_t* state);
-void ps_get_wifi_info(wifi_info_t* info);
-void ps_set_wifi_info(const wifi_info_t* info);
-bool ps_reinit_wifi();
+void ps_get_net_info(net_info_t* info);
+void ps_set_net_info(const net_info_t* info);
+bool ps_reinit_net();
+bool ps_has_new_cam_name(const net_info_t* info);
 char ps_nibble_to_ascii(uint8_t n);
 
 #endif /* PS_UTILITIES_H */

@@ -5,7 +5,7 @@
  * making those available to other tasks through a shared buffer and event
  * interface.
  *
- * Copyright 2020 Dan Julio
+ * Copyright 2020-2022 Dan Julio
  *
  * This file is part of tCam.
  *
@@ -60,6 +60,9 @@
 //
 static const char* TAG = "lep_task";
 
+static int lep_brd_type;
+static int lep_if_type;
+
 
 
 //
@@ -72,6 +75,8 @@ static const char* TAG = "lep_task";
  */
 void lep_task()
 {
+	int lep_csn_pin;
+	int lep_vsync_pin;
 	int task_state = STATE_INIT;
 	int rsp_buf_index = 0;
 	int vsync_count = 0;
@@ -81,11 +86,6 @@ void lep_task()
 	
 	ESP_LOGI(TAG, "Start task");
 	
-	// ???
-	gpio_reset_pin(25);
-	gpio_set_direction(25, GPIO_MODE_OUTPUT);
-	gpio_set_level(25, 0);
-	
 	// Attempt to initialize the CCI interface
 	if (!cci_init()) {
 		ESP_LOGE(TAG, "Lepton CCI initialization failed");
@@ -94,7 +94,15 @@ void lep_task()
 	}
 	
 	// Attempt to initialize the VoSPI interface
-	if (vospi_init() != ESP_OK) {
+	ctrl_get_if_mode(&lep_brd_type, &lep_if_type);
+	if (lep_brd_type == CTRL_BRD_ETH_TYPE) {
+		lep_csn_pin = BRD_E_LEP_CSN_IO;
+		lep_vsync_pin = BRD_E_LEP_VSYNC_IO;
+	} else {
+		lep_csn_pin = BRD_W_LEP_CSN_IO;
+		lep_vsync_pin = BRD_W_LEP_VSYNC_IO;
+	}
+	if (vospi_init(lep_csn_pin) != ESP_OK) {
 		ESP_LOGE(TAG, "Lepton VoSPI initialization failed");
 		ctrl_set_fault_type(CTRL_FAULT_LEP_VOSPI);
 		vTaskDelete(NULL);
@@ -116,9 +124,8 @@ void lep_task()
 				break;
 			
 			case STATE_RUN:   // Initialized and running
-				gpio_set_level(25, 1); // ???
 				// Spin waiting for vsync to be asserted
-				while (gpio_get_level(LEP_VSYNC_IO) == 0) {
+				while (gpio_get_level((gpio_num_t) lep_vsync_pin) == 0) {
 //					vTaskDelay(pdMS_TO_TICKS(9));
 				}
 				vsyncDetectedUsec = esp_timer_get_time();
@@ -150,7 +157,6 @@ void lep_task()
 					// Hold fault counters reset while operating
 					sync_fail_count = 0;
 					reset_fail_count = 0;
-					gpio_set_level(25, 0); // ???
 					
 					vTaskDelay(pdMS_TO_TICKS(30));
 				} else {
@@ -192,9 +198,15 @@ void lep_task()
 				ESP_LOGI(TAG,  "Reset Lepton");
 				
 				// Assert hardware reset
-				gpio_set_level(LEP_RESET_IO, 1);
-				vTaskDelay(pdMS_TO_TICKS(10));
-				gpio_set_level(LEP_RESET_IO, 0);
+				if (lep_brd_type == CTRL_BRD_ETH_TYPE) {
+					gpio_set_level(BRD_E_LEP_RESET_IO, 1);
+					vTaskDelay(pdMS_TO_TICKS(10));
+					gpio_set_level(BRD_E_LEP_RESET_IO, 0);
+				} else {
+					gpio_set_level(BRD_W_LEP_RESET_IO, 1);
+					vTaskDelay(pdMS_TO_TICKS(10));
+					gpio_set_level(BRD_W_LEP_RESET_IO, 0);
+				}
 				
 				// Delay for Lepton internal initialization (max 950 mSec)
     			vTaskDelay(pdMS_TO_TICKS(1000));

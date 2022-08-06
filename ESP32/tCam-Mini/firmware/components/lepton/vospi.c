@@ -5,7 +5,7 @@
  * Optionally supports collecting telemetry when enabled as a footer (does not
  * support telemetry enabled as a header).
  *
- * Copyright 2020 Dan Julio
+ * Copyright 2020-2022 Dan Julio
  *
  * This file is part of tCam.
  *
@@ -85,7 +85,7 @@ static void copy_packet_to_telem_buffer(uint8_t line);
 /**
  * Initialise the VoSPI interface.
  */
-int vospi_init()
+int vospi_init(int csn_pin)
 {
 	esp_err_t ret;
   
@@ -94,7 +94,7 @@ int vospi_init()
 		.address_bits = 0,
 		.clock_speed_hz = LEP_SPI_FREQ_HZ,
 		.mode = 3,
-		.spics_io_num = LEP_CSN_IO,
+		.spics_io_num = csn_pin,
 		.queue_size = 1,
 		.flags = SPI_DEVICE_HALFDUPLEX,
 		.cs_ena_pretrans = 10

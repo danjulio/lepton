@@ -5,7 +5,7 @@
  * Responsible for sending responses to the connected client.  Sources of responses
  * include the command task, lepton task and file task.
  *
- * Copyright 2020-2021 Dan Julio
+ * Copyright 2020-2022 Dan Julio
  *
  * This file is part of tCam.
  *
