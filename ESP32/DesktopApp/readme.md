@@ -43,6 +43,8 @@ Version 3.0.0
 2. You may also have to authorize the application on OS X or Windows platforms since I don't yet sign it or package it for distribution in their online stores.
 3. Windows users may need to install support for Bonjour (mDNS) using the ```bonjoursdksetup.exe``` installer from Apple found here.
 4. Different Linux desktop systems render the toolbar differently and all toolbar items aren't visible since Linux renders the text next to the icon instead of beneath it.  You can make the window wider to expose some important controls like Stream that has sub-menus or you can use the pull-down menus at the top of the window.
+5. Linux users may need to install ```libwebkit2gtk``` to view the built-in documentation.
+6. The Raspberry Pi versions basically require a Pi 4 to display a stream at the full rate.  On slower Pi models the application may not be able to keep up and the controls may become unresponsive when streaming at the full ~9 FPS rate.
 
 An advance apology - I develop on my Mac and do quick tests on Windows 7 and 10, and Ubuntu, Kubuntu and Raspbian.  Although xojo provides pretty good cross-platform compatibility for OS X and Windows, sometimes there are issues with Linux.  If you find some other issue, please let me know and I'll try to fix it.
 
