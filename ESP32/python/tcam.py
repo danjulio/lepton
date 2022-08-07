@@ -1,7 +1,7 @@
 """
   tCam Python Package
 
-  Copyright 2021 Dan Julio and Todd LaWall (bitreaper)
+  Copyright 2021-2022 Dan Julio and Todd LaWall (bitreaper)
 
   This file is part of tCam.
 
@@ -519,6 +519,42 @@ class TCam:
         self.cmdQueue.put(cmd)
         return self.responseQueue.get(block=True, timeout=timeout)
 
+    def set_config_agc(self, agc_enabled=1, timeout=None):
+        if not timeout:
+            timeout = self.responseTimeout
+        cmd = {
+            "cmd": "set_config",
+            "args": {
+                "agc_enabled": agc_enabled,
+            },
+        }
+        self.cmdQueue.put(cmd)
+        return self.responseQueue.get(block=True, timeout=timeout)
+
+    def set_config_emissivity(self, emissivity=98, timeout=None):
+        if not timeout:
+            timeout = self.responseTimeout
+        cmd = {
+            "cmd": "set_config",
+            "args": {
+                "emissivity": emissivity,
+            },
+        }
+        self.cmdQueue.put(cmd)
+        return self.responseQueue.get(block=True, timeout=timeout)
+
+    def set_config_gain_mode(self, gain_mode=2, timeout=None):
+        if not timeout:
+            timeout = self.responseTimeout
+        cmd = {
+            "cmd": "set_config",
+            "args": {
+                "gain_mode": gain_mode,
+            },
+        }
+        self.cmdQueue.put(cmd)
+        return self.responseQueue.get(block=True, timeout=timeout)
+
     def get_lep_cci(self, command=0x4ECC, length=4, timeout=None):
         """
         get_lep_cci()
@@ -598,7 +634,7 @@ class TCam:
         timeout=None
     ):
         """
-        set_wifi()
+        set_wifi() - Deprecated.  Use set_wifi_ap, set_wifi_sta or set_network instead.
         """
         if not timeout:
             timeout = self.responseTimeout
@@ -616,7 +652,105 @@ class TCam:
             },
         }
         self.cmdQueue.put(cmd)
-        return self.responseQueue.get(block=True, timeout=timeout)
+
+    def set_wifi_ap(self, ap_ssid, ap_pw, timeout=None):
+        """
+        set_wifi_ap()
+        
+        Configure the camera as a WiFi access point.  Note that the camera will be
+        disconnected.  You should call disconnect() after issuing this call.
+        """
+        if not timeout:
+            timeout = self.responseTimeout
+        cmd = {
+            "cmd": "set_wifi",
+            "args": {
+                "ap_ssid": ap_ssid,
+                "ap_pw": ap_pw,
+                "flags": 1,
+            },
+        }
+        self.cmdQueue.put(cmd)
+
+    def set_wifi_sta(
+        self,
+        sta_ssid,
+        sta_pw,
+        is_static=False,
+        sta_ip_addr="192.168.0.2",
+        sta_ip_netmask="255.255.255.0",
+        timeout=None
+    ):
+        """
+        set_wifi_sta()
+        
+        Configure the camera as a WiFi client.  Note that the camera will be
+        disconnected.  You should call disconnect() after issuing this call.
+        Set is_static to True and include sta_ip_addr and sta_ip_netmask to configure
+        a static IP address.  Setting is_static to False configured a DHCP served
+        address (and doesn't require the stat_ip_addr or sta_ip_netmask arguments).
+        """
+        if not timeout:
+            timeout = self.responseTimeout
+        if is_static:
+            cmd = {
+                "cmd": "set_wifi",
+                "args": {
+                    "sta_ssid": sta_ssid,
+                    "sta_pw": sta_pw,
+                    "flags": 145,
+                    "sta_ip_addr": sta_ip_addr,
+                    "sta_netmask": sta_ip_netmask,
+                },
+            }
+        else:
+            cmd = {
+                "cmd": "set_wifi",
+                "args": {
+                    "sta_ssid": sta_ssid,
+                    "sta_pw": sta_pw,
+                    "flags": 129,
+                },
+            }
+        self.cmdQueue.put(cmd)
+
+    def set_static_ip(
+        self,
+        is_static=False,
+        sta_ip_addr="192.168.0.2",
+        sta_ip_netmask="255.255.255.0",
+        timeout=None
+    ):
+        """
+        set_static_ip()
+        
+        Configure the camera's network interface with a static IP address or to receive
+        a DHCP served address.  Should only be sent to a WiFi connected camera when it
+        is configured as in STA mode (client) or an Ethernet connected camera.  Note that
+        the camera will be disconnected.  You should call disconnect() after issuing this call.
+        Set is_static to True and include sta_ip_addr and sta_ip_netmask to configure
+        a static IP address.  Setting is_static to False configured a DHCP served
+        address (and doesn't require the stat_ip_addr or sta_ip_netmask arguments).
+        """
+        if not timeout:
+            timeout = self.responseTimeout
+        if is_static:
+            cmd = {
+                "cmd": "set_wifi",
+                "args": {
+                    "flags": 145,
+                    "sta_ip_addr": sta_ip_addr,
+                    "sta_netmask": sta_ip_netmask,
+                },
+            }
+        else:
+            cmd = {
+                "cmd": "set_wifi",
+                "args": {
+                    "flags": 129,
+                },
+            }
+        self.cmdQueue.put(cmd)
 
     def send_raw(self, payload: bytes, timeout=None):
         """
