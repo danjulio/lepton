@@ -162,6 +162,42 @@ All arguments are required.
 
 Returns the ```cam_info``` json response to the command.
 
+#### set\_config\_agc(self, agc\_enabled=1, timeout=None)
+
+	rsp = cam.set_config_agc(0)
+
+Sends a ```set_config``` command to the attached camera with only the agc_enabled argument.  The above example sets AGC off.
+
+| Argument | Description |
+| --- | --- |
+| agc_enabled | Lepton AGC Mode: 1: Enabled, 0: Disabled (Radiometric output) |
+
+Returns the ```cam_info``` json response to the command.
+
+#### set\_config\_emissivity(self, emissivity=98, timeout=None)
+
+	rsp = cam.set_config_emissivity(96)
+
+Sends a ```set_config``` command to the attached camera with only the emissivity argument.  The above example sets the emissivity to 96%.
+
+| Argument | Description |
+| --- | --- |
+| emissivity | Lepton Emissivity: 1 - 100 (integer percent) |
+
+Returns the ```cam_info``` json response to the command.
+
+#### set\_config\_gain\_mode(self, gain\_mode=2, timeout=None)
+
+	rsp = cam.set_config(0)
+
+Sends a ```set_config``` command to the attached camera with only the gain_mode argument.  The above example sets the gain mode too High.
+
+| Argument | Description |
+| --- | --- |
+| gain_mode | Lepton Gain Mode: 0: High, 1: Low, 2: Auto |
+
+Returns the ```cam_info``` json response to the command.
+
 #### get\_lep\_cci(self, command=0x4ECC, length=4, timeout=None)
 
 	cci_data = cam.get_lep_cci(0x4EBC, 8)
@@ -229,15 +265,74 @@ Returns the ```wifi``` response.  For example
 
 	{"wifi":{"ap_ssid":"tCam-Mini-289B","sta_ssid":"","flags":15,"ap_ip_addr":"192.168.4.1","sta_ip_addr":"192.168.4.2","sta_netmask":"255.255.255.0","cur_ip_addr":"10.0.1.123"}}
 
-#### set\_wifi(self, ap\_ssid="ApSSID", ap\_pw="ApPassword", ap\_ip\_addr="192.168.4.1", flags=145, sta\_ssid="AHomeNetwork", sta\_pw="anotherpassword", sta\_ip\_addr="192.168.0.2", sta\_netmask="255.255.255.0", timeout=None)
+#### set\_wifi\_ap(self, ap\_ssid, ap\_pw, timeout=None)
 
-This command is broken at the moment.  Must be able to set only some arguments.  Perhaps split into three commands.
+	cam.set_wifi_ap("AP_SSID", "AP_PASSWORD")
 
+Sends a ```set_wifi``` command to the attached camera to configure it as an Access Point with the specified SSID and password.
+
+| Argument | Description |
+| --- | --- |
+| ap_ssid | Access Point SSID (1-32 characters).  Also becomes the camera name. |
+| ap_pw | Access Point WPA password (8-32 characters). |
+
+All arguments are required.
+
+There is no return value.  You must call ```cam.disconnect()``` following this call since the camera will have disconnected the socket.
+
+#### set\_wifi\_sta(self, sta\_ssid, sta\_pw, is\_static=False, sta\_ip\_addr="192.168.0.2", sta\_ip\_netmask="255.255.255.0", timeout=None)
+
+	cam.set_wifi_sta("STA_SSID", "STA_PW")
+
+Sends a ```set_wifi``` command to the attached camera to configure it as a client to an existing WiFi network obtaining a DHCP-served IP address.
+
+	cam.set_wifi_sta("TA_SSID", "STA_PW", True, "10.0.1.73", "255.255.255.0")
+
+Sends a ```set_wifi``` command to the attached camera to configure it as a client to an existing WiFi network with the specified static IP address.
+
+| Argument | Description |
+| --- | --- |
+| sta_ssid | Existing WiFi network SSID (1-32 characters) |
+| sta_pw | Existing WiFi network password (8-32 characters) |
+| is_static | Set True to configure a static IP address, False for a DHCP-served address |
+| sta_ip_addr | Static IP address string |
+| sta_ip_netmask | Static IP address netmask string |
+
+Only ```sta_ssid``` and ```sta_pw``` are required. 
+
+There is no return value.  You must call ```cam.disconnect()``` following this call since the camera will have disconnected the socket.
+
+#### set\_static\_ip(self, is\_static=False, sta\_ip\_addr="192.168.0.2", sta\_ip\_netmask="255.255.255.0", timeout=None)
+
+	cam.set_static_ip()
+	
+Sends a ```set_wifi``` command to the attached camera to configure it to receive a DHCP-served IP address.
+
+	cam.set_static_ip(True, "10.0.1.73", "255.255.255.0")
+	
+Sends a ```set_wifi``` command to the attached camera to configure it with a static IP address (10.0.1.73 in this example).
+
+| Argument | Description |
+| --- | --- |
+| is_static | Set True to configure a static IP address, False for a DHCP-served address |
+| sta_ip_addr | Static IP address string |
+| sta_ip_netmask | Static IP address netmask string |
+
+This command should only be run for a WiFi connected camera in STA mode or for an ethernet connected tCam-POE.  It will have no effect for a WiFi connected camera acting as an Access Point.
+
+There is no return value.  You must call ```cam.disconnect()``` following this call since the camera will have disconnected the socket.
+
+#### disconnect(self)
+
+	cam.disconnect()
+	
+Disconnect the driver from the camera.
 
 #### shutdown(self)
-Shut down the driver before finishing your program to close the socket or hardware connection and terminate an internal manager thread.
 
 	cam.shutdown()
+	
+Shut down the driver before finishing your program to close the socket or hardware connection and terminate an internal manager thread.
 
 ### Demos
 The ```examples``` directory contains several example python programs using the TCam driver.
