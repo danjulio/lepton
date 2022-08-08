@@ -50,7 +50,7 @@ def update():
         frame_image = ImageTk.PhotoImage(frame_image)
         l1.config(image=frame_image)
         l1.image = frame_image
-    l1.after(50, update)
+    l1.after(10, update)
 
 
 ########### Main Program ############
