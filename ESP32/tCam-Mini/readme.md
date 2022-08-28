@@ -15,7 +15,7 @@ The precompiled firmware and Windows-based programming application can be downlo
 Cameras running FW 2.0 and beyond can also use the over-the-air update capability in the Desktop application to load new firmware files.
 
 #### FW 3.0 (8/6/2022)
-FW revison 3.0 is a major new release.  It is designed to run on tCam-Mini and tCam-POE PCBs with Revison 3 silicon and 8 MB Flash memory).
+FW revision 3.0 is a major new release.  It is designed to run on tCam-Mini and tCam-POE PCBs with Revision 3 silicon and 8 MB Flash memory).
 
 1. Support tCam-POE board
 2. Optimize flash reads for improved performance
@@ -130,33 +130,34 @@ The camera currently supports the following commands.  The communicating applica
 
 | Command | Description |
 | --- | --- |
-| get_status | Returns a packet with camera status.  The application uses this to verify communication with the camera. |
-| get_image | Returns a packet with metadata, radiometric (or AGC) image data and Lepton telemetry objects. |
-| set_time | Set the camera's clock. |
-| get_config | Returns a packet with the camera's current settings. |
-| get\_lep_cci | Reads and returns specified data from the Lepton's CCI interface. |
-| run_ffc | Initiates a Lepton Flat Field Correction. |
-| set_config | Set the camera's settings. |
-| set\_lep_cci | Writes specified data to the Lepton's CCI interface. |
-| set_spotmeter | Set the spotmeter location in the Lepton. |
-| stream\_on | Starts the camera streaming images and sets the interval between images and an optional number of images to stream. |
-| sstream\_off | Stops the camera from streaming images. |
-| get_wifi | Returns a packet with the camera's current WiFi and Network configuration. |
-| set_wifi | Set the camera's WiFi and Network configuration.  The WiFi subsystem is immediately restarted.  The application should immediately close its socket after sending this command. |
-| fw\_update_request | Informs the camera of a OTA FW update size and revision and starts it blinking the LED alternating between red and green to signal to the user a OTA FW update has been requested. |
-| fw\_segment | Sends a sequential chunk of the new FW during an OTA FW update. |
+| [get_status](#get_status) | Returns a packet with camera status.  The application uses this to verify communication with the camera. |
+| [get_image](#get_image) | Returns a packet with metadata, radiometric (or AGC) image data and Lepton telemetry objects. |
+| [set_time](#set_time) | Set the camera's clock. |
+| [get_config](#get_config) | Returns a packet with the camera's current settings. |
+| [get\_lep_cci](#get_lep_cci) | Reads and returns specified data from the Lepton's CCI interface. |
+| [run_ffc](#run_ffc) | Initiates a Lepton Flat Field Correction. |
+| [set_config](#set_config) | Set the camera's settings. |
+| [set\_lep_cci](#set_lep_cci) | Writes specified data to the Lepton's CCI interface. |
+| [set_spotmeter](#set_spotmeter) | Set the spotmeter location in the Lepton. |
+| [stream_on](#stream_on) | Starts the camera streaming images and sets the interval between images and an optional number of images to stream. |
+| [stream_off](#stream_off) | Stops the camera from streaming images. |
+| [get_wifi](#get_wifi) | Returns a packet with the camera's current WiFi and Network configuration. |
+| [set_wifi](#set_wifi) | Set the camera's WiFi and Network configuration.  The WiFi subsystem is immediately restarted.  The application should immediately close its socket after sending this command. |
+| [fw\_update_request](#fw_update_request) | Informs the camera of a OTA FW update size and revision and starts it blinking the LED alternating between red and green to signal to the user a OTA FW update has been requested. |
+| [fw_segment](#fw_segment) | Sends a sequential chunk of the new FW during an OTA FW update. |
 
 The camera generates the following responses.
 
 | Response | Description |
 | --- | --- |
-| cam_info | Generic information packet from the camera.  Status for commands that do not generate any other response.  May also contain alert or error messages from the camera. |
-| cci_reg | Response to both get\_cci\_reg and set\_cci\_reg commands. |
-| config | Response to get_config command. |
-| get_fw | Request a sequential chunk of the new FW during an OTA FW update. |
-| image | Response to get_image command or initiated periodically by the camera if streaming has been enabled. |
-| status | Response to get_status command. |
-| wifi | Response to get_wifi command. |
+| [cam_info](#cam_info-messages) | Generic information packet from the camera.  Status for commands that do not generate any other response.  May also contain alert or error messages from the camera. |
+| [cci_reg](#cci_reg-response) | Response to both get\_cci\_reg and set\_cci\_reg commands. |
+| [config](#get_config-response) | Response to get_config command. |
+| [get_fw](#get_fw) | Request a sequential chunk of the new FW during an OTA FW update. |
+| [image](#get_image-response) | Sent by the camera over the network as a response to get_image command or initiated periodically by the camera if streaming has been enabled. |
+| [image_ready](#image_ready-response) | Sent by the camera over the serial interface when an image is ready to be read through the SPI interface. |
+| [status](#get_status-response) | Response to get_status command. |
+| [wifi](#get_wifi-response) | Response to get_wifi command. |
 
 Commands and responses are detailed below with example json strings.
 
@@ -204,7 +205,9 @@ The get_status response may include additional information for other camera mode
 #### get_image
 ```{"cmd":"get_image"}```
 
-#### [WiFi only] get_image response (or initiated periodically while streaming)
+#### get_image response
+WiFi only.  Response to get_image or initiated periodically while streaming.
+
 ```
 {
 	"metadata":	{
@@ -225,7 +228,9 @@ The get_status response may include additional information for other camera mode
 | radiometric | Base64 encoded Lepton pixel data (19,200 16-bit words / 38,400 bytes).  Each pixel contains a 16-bit absolute (Kelvin) temperature value when the Lepton is operating in Radiometric output mode.  The Lepton's gain mode specifies the resolution (0.01 K in High gain, 0.1 K in Low gain). Each pixel contains an 8-bit value when the Lepton has AGC enabled. |
 | telemetry | Base64 encoded Lepton telemetry data (240 16-bit words / 480 bytes).  See below for some important telemetry words and the Lepton Datasheet for a full description of the telemetry contents. |
 
-#### [Hardware Interface only] image_ready response (or initiated periodically while streaming)
+#### image_ready response
+Hardware Interface only.  Response to get_image or initiated periodically while streaming.
+
 ```{"image_ready": 51980}```
 
 The ```image_ready``` response indicates that an image is available to read from the slave SPI interface.  The value indicates the number of bytes in the image, including the start and end delimiters. It is followed by a 4 byte checksum and 0-3 dummy bytes.  The dummy bytes may be necessary since the SPI read length must be a multiple of 4 bytes.  The SPI read must be a single operation and the image must be read from the slave SPI interface before another image will be sent.  For FW 2.0 and 2.1, the camera's response process hangs until the image is read.  Subsequent firmware releases timeout and discard the image after one second.
@@ -250,7 +255,9 @@ The checksum is simply the 32-bit sum of all ```image_ready``` response bytes wi
 | command | Decimal representation of the 16-bit Lepton COMMAND register value. For example, the value "20172" above is 0x4ECC (RAD Spotmeter Region of Interest). |
 | length | Decimal number of 16-bit words to read (1-512). |
 
-#### cci\_reg response (for get\_lep_cci)
+#### cci\_reg response
+Response for get\_lep_cci.
+
 ```
 {
   "cci_reg": {
@@ -300,6 +307,8 @@ All set_time args must be included.
 ```{"cmd":"get_config"}```
 
 #### get_config response
+Response to get_config.
+
 ```
 {
 	"config":{
@@ -319,7 +328,8 @@ All set_time args must be included.
 #### run_ffc
 ```{"cmd":"run_ffc"}```
 
-#### cam\_info response for run_ffc
+The ```run_ffc``` command generates the following ```cam_info``` response.
+
 ```
 {
   "cam_info": {
@@ -370,7 +380,8 @@ Individual args values may be left out.  The camera will use the existing value.
 
 Note: It is possible to crash the Lepton or camera using the CCI interface.
 
-#### cci\_reg response (for set\_lep_cci)
+The ```set_lep_cci``` command generates the following ```cam_info``` response.
+
 ```
 {
   "cci_reg": {
@@ -409,7 +420,7 @@ Note: It is possible to crash the Lepton or camera using the CCI interface.
 
 Column c1 should be less than or equal to c2.  Row r1 should be less than or equal to r2.  All four argument values must be specified.  They specify the box of pixels the Lepton uses to calculate the spotmeter temperature (which is contained in the image telemetry).
 
-#### stream\_on
+#### stream_on
 ```
 {
 	"cmd":"stream_on",
@@ -427,7 +438,7 @@ Column c1 should be less than or equal to c2.  Row r1 should be less than or equ
 
 Streaming is a slightly special case for the command interface.  Responses are typically generated after receiving the associated get command.  However the image response is generated repeatedly by the camera after streaming has been enabled at the rate, and for the number of times, specified in the set\_stream\_on command.
 
-#### stream\_off
+#### stream_off
 ```{"cmd":"stream_off"}```
 
 #### get_wifi
