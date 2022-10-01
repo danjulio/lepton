@@ -8,7 +8,7 @@ There are three ways to load firmware into tCam.
 The second option is described here.  It requires a Microsoft Windows computer.
 
 ### tCam-Mini version 2.0 FW (and beyond)
-Starting with release 2.0 the tCam-Mini firmware supports OTA updates.  This capability makes use of multiple partitions in the ESP32 flash memory and requires an ESP32 with Revision 3 silicon and at least 8 MB Flash such as the board available from [Group Gets](https://store.groupgets.com/collections/frontpage/products/tcam-mini-with-lepton-3-5-wireless-streaming-thermal-camera-board).  Dev board based builds (for example using the TTGO T7 module) typically have only 4 MB of flash and Rev 1 silicon and must use the Revision 1.3 FW (ESP_v1_silicon).
+Starting with release 2.0 the tCam-Mini firmware supports OTA updates.  This capability makes use of multiple partitions in the ESP32 flash memory and requires an ESP32 with Revision 3 silicon and at least 8 MB Flash such as the board available from [Group Gets](https://store.groupgets.com/collections/frontpage/products/tcam-mini-with-lepton-3-5-wireless-streaming-thermal-camera-board).  Dev board based builds (for example using the TTGO T7 module) typically have only 4 MB of flash and Rev 1 silicon and must use the Revision 1.3 FW (ESP\_v1_silicon).
 
 
 ### Download firmware files
@@ -18,7 +18,7 @@ tCam-Mini FW 2.0 and beyond require four binary files.
 	firmware/precompiled/bootloader.bin
 	firmware/precompiled/ota_data_initial.bin
 	firmware/precompiled/tCamMini.bin
-	firmware/precompiled/partitions_singleapp.bin
+	firmware/precompiled/partitions-table.bin
 ```
 
 FW 1.3 requires three binary files.
