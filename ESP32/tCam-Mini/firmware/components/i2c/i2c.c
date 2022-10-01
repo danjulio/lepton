@@ -47,18 +47,23 @@ esp_err_t i2c_master_init(int scl_pin, int sda_pin)
 {
     int i2c_master_port = I2C_MASTER_NUM;
     i2c_config_t conf;
-    
+
+    // Create a mutex for thread safety
     i2c_mutex = xSemaphoreCreateMutex();
-    
+
+    // Configure the I2C controller in master mode using the pins provided
     conf.mode = I2C_MODE_MASTER;
     conf.sda_io_num = sda_pin;
     conf.sda_pullup_en = GPIO_PULLUP_ENABLE;
     conf.scl_io_num = scl_pin;
     conf.scl_pullup_en = GPIO_PULLUP_ENABLE;
     conf.master.clk_speed = I2C_MASTER_FREQ_HZ;
-    
-    i2c_param_config(i2c_master_port, &conf);
-    
+    conf.clk_flags = 0;
+    esp_err_t err = i2c_param_config(i2c_master_port, &conf);
+    if (err != ESP_OK)
+        return err;
+
+    // Install the I2C driver
     return i2c_driver_install(i2c_master_port, conf.mode,
                               I2C_MASTER_RX_BUF_LEN,
                               I2C_MASTER_TX_BUF_LEN, 0);
