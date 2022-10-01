@@ -4,7 +4,7 @@
  * Utility functions to implement a firmware update mechanism using two OTA slots
  * in flash memory.
  *
- * Copyright 2021 Dan Julio
+ * Copyright 2021-2022 Dan Julio
  *
  * This file is part of tCam.
  *
@@ -37,7 +37,7 @@
 static const char* TAG = "upd_utilities";
 
 // State
-static char exp_version[UPD_MAX_VER_LEN];
+static char exp_version[UPD_MAX_VER_LEN+1];
 static uint32_t total_len;
 static uint32_t cur_len;
 static const esp_partition_t *update_partition = NULL;
@@ -121,9 +121,9 @@ bool upd_process_bytes(uint32_t start, uint32_t len, uint8_t* buf)
 	}
 	
 	// On the first transfer, check to make sure we're downloading the expected
-	// version for our platform.  Note this assumes we get enough bytes (X) in the first
-	// download to include the app description.  Otherwise we'll silently skip this test.
-	// We shouldn't ever see this...
+	// version for our platform.  Note this assumes we get enough bytes in the first
+	// download to include the app description.  Otherwise we'll silently skip this test
+	// (we shouldn't ever skip it...)
 	// 
 	if (start == 0) {
 		const esp_app_desc_t* cur_app_infoP;

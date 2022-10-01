@@ -28,11 +28,10 @@
 #include "esp_eth.h"
 #include "esp_event.h"
 #include "esp_log.h"
+#include "esp_netif.h"
 #include "freertos/FreeRTOS.h"
-#include <lwip/sockets.h>
 #include <string.h>
 #include "system_config.h"
-#include "tcpip_adapter.h"
 
 
 
@@ -40,6 +39,9 @@
 // Ethernet Utilities local variables
 //
 static const char* TAG = "eth_utilities";
+
+// Ethernet netif instance
+static esp_netif_t *eth_netif;
 
 // Network information - we don't use the WiFi-specific parts
 static char ap_ssid_array[PS_SSID_MAX_LEN+1];
@@ -83,20 +85,22 @@ static void ip_event_handler(void *arg, esp_event_base_t event_base, int32_t eve
 bool eth_init()
 {
 	esp_err_t ret;
+	esp_netif_config_t netif_cfg = ESP_NETIF_DEFAULT_ETH();
 	
 	// Initialize the TCP/IP stack
-	tcpip_adapter_init();
-	
-	// Setup the ethernet event handlers
-	ret = esp_event_loop_create_default();
+	ret = esp_netif_init();
 	if (ret != ESP_OK) {
-		ESP_LOGE(TAG, "Could not create default event loop handler (%d)", ret);
+		ESP_LOGE(TAG, "Could not init netif (%d)", ret);
 		return false;
 	}
 	
-	ret = tcpip_adapter_set_default_eth_handlers();
+	// Create the instance of esp_netif for Ethernet
+    eth_netif = esp_netif_new(&netif_cfg);
+	
+	// Setup the default event handlers
+	ret = esp_event_loop_create_default();
 	if (ret != ESP_OK) {
-		ESP_LOGE(TAG, "Could not set tcpip adapter default handlers (%d)", ret);
+		ESP_LOGE(TAG, "Could not create default event loop handler (%d)", ret);
 		return false;
 	}
 	
@@ -148,6 +152,13 @@ bool eth_init()
 		return false;
 	}
 	
+	// Attach Ethernet driver to TCP/IP stack
+	ret = esp_netif_attach(eth_netif, esp_eth_new_netif_glue(eth_handle));
+	if (ret != ESP_OK) {
+		ESP_LOGE(TAG, "Could not attach ethernet driver (%d)", ret);
+		return false;
+	}
+	
 	// Finally attempt to initialize the ethernet interface
 	return eth_reinit();
 }
@@ -156,13 +167,14 @@ bool eth_init()
 bool eth_reinit()
 {
 	esp_err_t ret;
-	tcpip_adapter_ip_info_t ipInfo;
+	esp_netif_ip_info_t ipInfo;
 	
 	// Shut down the old configuration if one exists
 	if ((eth_info.flags & NET_INFO_FLAG_ENABLED) != 0) {
 		ESP_LOGI(TAG, "Ethernet Stopping");
 		esp_eth_stop(eth_handle);
 		eth_info.flags &= ~NET_INFO_FLAG_ENABLED;
+		eth_info.flags &= ~NET_INFO_FLAG_CONNECTED;
 	}
 
 	// Update the ethernet info (because we're called when it's updated)
@@ -174,8 +186,8 @@ bool eth_reinit()
 		// Configure the IP address mechanism
 		if ((eth_info.flags & NET_INFO_FLAG_CL_STATIC_IP) != 0) {
 			// Static IP
-			ret = tcpip_adapter_dhcpc_stop(TCPIP_ADAPTER_IF_ETH);
-			if (ret != ESP_OK) {
+			ret = esp_netif_dhcpc_stop(eth_netif);
+			if ((ret != ESP_OK) && (ret != ESP_ERR_ESP_NETIF_DHCP_ALREADY_STOPPED)) {
 	    		ESP_LOGE(TAG, "Stop DHCP returned %d", ret);
 	    		return false;
 	    	}
@@ -184,14 +196,17 @@ bool eth_reinit()
 							 (eth_info.sta_ip_addr[2] << 8) |
 							 (eth_info.sta_ip_addr[1] << 16) |
 							 (eth_info.sta_ip_addr[0] << 24);
-	  		inet_pton(AF_INET, "0.0.0.0", &ipInfo.gw);
+	  		ipInfo.gw.addr = esp_netif_ip4_makeu32(0, 0, 0, 0);
 	  		ipInfo.netmask.addr = eth_info.sta_netmask[3] |
 							     (eth_info.sta_netmask[2] << 8) |
 							     (eth_info.sta_netmask[1] << 16) |
 							     (eth_info.sta_netmask[0] << 24);
-	  		tcpip_adapter_set_ip_info(TCPIP_ADAPTER_IF_ETH, &ipInfo);
+	  		ret = esp_netif_set_ip_info(eth_netif, &ipInfo);
+			if (ret != ESP_OK) {
+				ESP_LOGE(TAG, "Set IP info returned %d", ret);
+			}
 		} else {
-			ret = tcpip_adapter_dhcpc_start(TCPIP_ADAPTER_IF_ETH);
+			ret = esp_netif_dhcpc_start(eth_netif);
 			if (ret != ESP_OK) {
 	    		ESP_LOGE(TAG, "Start DHCP returned %d", ret);
 	    		return false;
@@ -207,9 +222,6 @@ bool eth_reinit()
 		ESP_LOGE(TAG, "Could not start ethernet (%d)", ret);
 		return false;
 	}
-	
-	// Nothing should be connected now
-	eth_info.flags &= ~NET_INFO_FLAG_CONNECTED;
 	
 	return true;
 }
@@ -258,7 +270,7 @@ static void eth_event_handler(void *arg, esp_event_base_t event_base, int32_t ev
 static void ip_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
 {
 	ip_event_got_ip_t *event = (ip_event_got_ip_t *) event_data;
-	const tcpip_adapter_ip_info_t *ip_info = &event->ip_info;
+	const esp_netif_ip_info_t *ip_info = &event->ip_info;
 	
 	ESP_LOGI(TAG, "Got IP Address:" IPSTR, IP2STR(&ip_info->ip));
     

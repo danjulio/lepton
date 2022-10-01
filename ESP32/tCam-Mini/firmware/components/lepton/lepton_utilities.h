@@ -127,12 +127,22 @@
 #define LEP_FFC_STATE_RUN      0x00000020
 #define LEP_FFC_STATE_CMPL     0x00000030
 
+//
+// Lepton Types
+//
+#define LEP_TYPE_3_5           0
+#define LEP_TYPE_3_0           1
+#define LEP_TYPE_3_1           2
+#define LEP_TYPE_UNK           3
+
+
 
 //
 // Lepton Utilities API
 //
 bool lepton_init();
 bool lepton_is_radiometric();
+int lepton_get_model();
 void lepton_agc(bool en);
 void lepton_ffc();
 void lepton_gain_mode(uint8_t mode);

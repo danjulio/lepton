@@ -43,6 +43,7 @@
 static const char* TAG = "lepton_utilities";
 
 static bool lep_is_radiometric = false;
+static int lep_type;
 
 
 
@@ -65,16 +66,24 @@ bool lepton_init()
 	}
 	
 	// Get the Lepton type (part number) to determine if it's a Lepton 3.0 or 3.5
-	lep_is_radiometric = false;
 	cci_get_part_number(pn);
 	ESP_LOGI(TAG, "Found Lepton, part number: %s", pn);
 	if (strncmp(pn, "500-0771-01", 32) == 0) {
 		ESP_LOGI(TAG, "  Radiometric Lepton 3.5");
 		lep_is_radiometric = true;
+		lep_type = LEP_TYPE_3_5;
+	} else if (strncmp(pn, "500-0758-99", 32) == 0) {
+		ESP_LOGI(TAG, "  Radiometric Lepton 3.1");
+		lep_is_radiometric = true;
+		lep_type = LEP_TYPE_3_1;
 	} else if (strncmp(pn, "500-0726-01", 32) == 0) {
 		ESP_LOGI(TAG, "  Non-radiometric Lepton 3.0");
+		lep_is_radiometric = false;
+		lep_type = LEP_TYPE_3_0;
 	} else {
 		ESP_LOGI(TAG, "  Unsupported Lepton");
+		lep_is_radiometric = true;
+		lep_type = LEP_TYPE_UNK;
 	}
 	
 	if (lep_is_radiometric) {
@@ -184,6 +193,12 @@ bool lepton_init()
 bool lepton_is_radiometric()
 {
 	return lep_is_radiometric;
+}
+
+
+int lepton_get_model()
+{
+	return lep_type;
 }
 
 

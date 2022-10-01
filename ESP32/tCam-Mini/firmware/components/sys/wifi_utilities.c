@@ -28,10 +28,10 @@
 #include "esp_system.h"
 #include "esp_log.h"
 #include "esp_event.h"
+#include "esp_netif.h"
 #include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "nvs_flash.h"
-#include <lwip/sockets.h>
 #include <string.h>
 
 
@@ -40,6 +40,9 @@
 // Wifi Utilities local variables
 //
 static const char* TAG = "wifi_utilities";
+
+// Wifi netif instance (changed each time wifi is re-started)
+static esp_netif_t *wifi_netif;
 
 // Wifi information
 static char wifi_ap_ssid_array[PS_SSID_MAX_LEN+1];
@@ -97,9 +100,13 @@ bool wifi_init()
 	esp_err_t ret;
 	
 	// Initialize the TCP/IP stack
-	tcpip_adapter_init();
+	ret = esp_netif_init();
+	if (ret != ESP_OK) {
+		ESP_LOGE(TAG, "Could not init netif (%d)", ret);
+		return false;
+	}
 	
-	// Setup the ethernet event handlers
+	// Setup the default event handlers
 	ret = esp_event_loop_create_default();
 	if (ret != ESP_OK) {
 		ESP_LOGE(TAG, "Could not create default event loop handler (%d)", ret);
@@ -169,7 +176,7 @@ bool wifi_init()
 
 
 /**
- * Re-initialize the WiFi system when information such as the SSID, password or enabe-
+ * Re-initialize the WiFi system when information such as the SSID, password or enable-
  * state have changed.  Returns false if anything fails.
  */
 bool wifi_reinit()
@@ -187,6 +194,10 @@ bool wifi_reinit()
 		esp_wifi_stop();
 		wifi_info.flags &= ~NET_INFO_FLAG_ENABLED;
 	}
+	
+	// Destroy the associated esp_netif object
+	esp_netif_destroy_default_wifi(wifi_netif);
+	wifi_netif = NULL;
 
 	if ((wifi_info.flags & NET_INFO_FLAG_INITIALIZED) == 0) {
 		// Attempt to initialize the wifi interface again
@@ -289,6 +300,9 @@ static bool enable_esp_wifi_ap()
 	esp_err_t ret;
 	int i;
 	
+	// Create the esp_netif object
+	wifi_netif = esp_netif_create_default_wifi_ap();
+	
 	// Enable the AP
 	wifi_config_t wifi_config = {
         .ap = {
@@ -336,29 +350,44 @@ static bool enable_esp_wifi_ap()
 static bool enable_esp_wifi_client()
 {
 	esp_err_t ret;
-	tcpip_adapter_ip_info_t ipInfo;
+	esp_netif_ip_info_t ipInfo;
+	
 	
 	// Configure the IP address mechanism
 	if ((wifi_info.flags & NET_INFO_FLAG_CL_STATIC_IP) != 0) {
 		// Static IP
-		ret = tcpip_adapter_dhcpc_stop(TCPIP_ADAPTER_IF_STA);
-		if (ret != ESP_OK) {
+		//
+		// Create the esp_netif object
+		wifi_netif = esp_netif_create_default_wifi_sta();
+		
+		// Stop the DHCP client
+		ret = esp_netif_dhcpc_stop(wifi_netif);
+		if ((ret != ESP_OK) && (ret != ESP_ERR_ESP_NETIF_DHCP_ALREADY_STOPPED)) {
     		ESP_LOGE(TAG, "Stop Station DHCP returned %d", ret);
     		return false;
     	}
     	
+    	// Set the Static IP address
 		ipInfo.ip.addr = wifi_info.sta_ip_addr[3] |
 						 (wifi_info.sta_ip_addr[2] << 8) |
 						 (wifi_info.sta_ip_addr[1] << 16) |
 						 (wifi_info.sta_ip_addr[0] << 24);
-  		inet_pton(AF_INET, "0.0.0.0", &ipInfo.gw);
+		ipInfo.gw.addr = esp_netif_ip4_makeu32(0, 0, 0, 0);
   		ipInfo.netmask.addr = wifi_info.sta_netmask[3] |
 						     (wifi_info.sta_netmask[2] << 8) |
 						     (wifi_info.sta_netmask[1] << 16) |
 						     (wifi_info.sta_netmask[0] << 24);
-  		tcpip_adapter_set_ip_info(TCPIP_ADAPTER_IF_STA, &ipInfo);
+		ret = esp_netif_set_ip_info(wifi_netif, &ipInfo);
+		if (ret != ESP_OK) {
+			ESP_LOGE(TAG, "Set IP info returned %d", ret);
+		}
 	} else {
-		ret = tcpip_adapter_dhcpc_start(TCPIP_ADAPTER_IF_STA);
+		// DHCP served address
+		//
+		// Create the esp_netif object
+		wifi_netif = esp_netif_create_default_wifi_sta();
+		
+		ret = esp_netif_dhcpc_start(wifi_netif);
 		if (ret != ESP_OK) {
     		ESP_LOGE(TAG, "Start Station DHCP returned %d", ret);
     		return false;
@@ -438,9 +467,10 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
         	
         case WIFI_EVENT_STA_CONNECTED:
         	ESP_LOGI(TAG, "Station connected");
-        	wifi_info.flags |= NET_INFO_FLAG_CONNECTED;
-        	sta_connected = true;
-    		sta_retry_num = 0;
+        	if ((wifi_info.flags & NET_INFO_FLAG_CLIENT_MODE) != 0) {
+        		// Client mode connect happens here (AP mode connect happens when we get an IP address)
+        		wifi_info.flags |= NET_INFO_FLAG_CONNECTED;
+        	}
         	break;
         	
         case WIFI_EVENT_STA_DISCONNECTED:
@@ -464,9 +494,13 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
 static void ip_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
 {
 	ip_event_got_ip_t *event = (ip_event_got_ip_t *) event_data;
-	const tcpip_adapter_ip_info_t *ip_info = &event->ip_info;
+	const esp_netif_ip_info_t *ip_info = &event->ip_info;
 	
-	ESP_LOGI(TAG, "Got IP Address:" IPSTR, IP2STR(&ip_info->ip));
+	wifi_info.flags |= NET_INFO_FLAG_CONNECTED;
+    sta_connected = true;
+    sta_retry_num = 0;
+    
+	ESP_LOGI(TAG, "Got IP Address: " IPSTR, IP2STR(&ip_info->ip));
 	
     wifi_info.cur_ip_addr[3] = ip_info->ip.addr & 0xFF;
     wifi_info.cur_ip_addr[2] = (ip_info->ip.addr >> 8) & 0xFF;

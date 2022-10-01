@@ -4,7 +4,7 @@
  * Utility functions to implement a firmware update mechanism using two OTA slots
  * in flash memory.
  *
- * Copyright 2021 Dan Julio
+ * Copyright 2021-2022 Dan Julio
  *
  * This file is part of tCam.
  *

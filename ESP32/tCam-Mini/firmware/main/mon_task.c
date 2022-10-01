@@ -134,13 +134,13 @@ static void print_task_stats()
 	uint32_t total_elapsed_time;
 	uint32_t task_elapsed_time;
 	uint32_t percentage_time;
-	UBaseType_t start_array_size, end_array_size;
+	volatile UBaseType_t start_array_size, end_array_size;
     
     // Sample the tasks over a 1 second period so we can compute some stats
     start_array_size = uxTaskGetSystemState(start_task_sample_array, MON_MAX_TASKS, &start_run_time);
     vTaskDelay(pdMS_TO_TICKS(1000));
     end_array_size = uxTaskGetSystemState(end_task_sample_array, MON_MAX_TASKS, &end_run_time);
-
+	
     // Compute and display stats
     total_elapsed_time = end_run_time - start_run_time;
     if (total_elapsed_time != 0) {

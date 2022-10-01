@@ -42,15 +42,11 @@ void app_main(void)
 	int brd_type;
 	int if_mode;
 	
-#ifdef TCAM_ETHERNET
-	ESP_LOGI(TAG, "tCamE startup");
-#else
-    ESP_LOGI(TAG, "tCam Mini startup");
-#endif
+    ESP_LOGI(TAG, "tCamMini starting");
     
     // Start the control task to light the red light immediately
     // and to determine what kind of interface we will be using
-    xTaskCreatePinnedToCore(&ctrl_task, "ctrl_task", 2048, NULL, 1, &task_handle_ctrl, 0);
+    xTaskCreatePinnedToCore(&ctrl_task, "ctrl_task", 2176, NULL, 1, &task_handle_ctrl, 0);
     
     // Allow task to start and determine operating mode
     vTaskDelay(pdMS_TO_TICKS(50));
@@ -88,11 +84,11 @@ void app_main(void)
     //  Core 1 : APP - lepton task
     if (if_mode == CTRL_IF_MODE_SIF) {
     	xTaskCreatePinnedToCore(&sif_cmd_task, "sif_cmd_task",  3072, NULL, 1, &task_handle_cmd,  0);
-    	xTaskCreatePinnedToCore(&rsp_task, "rsp_task",  3072, NULL, 19, &task_handle_rsp,  0);
+    	xTaskCreatePinnedToCore(&rsp_task, "rsp_task",  2816, NULL, 19, &task_handle_rsp,  0);
     	xTaskCreatePinnedToCore(&lep_task, "lep_task",  2048, NULL, 18, &task_handle_lep,  1);
     } else {
     	xTaskCreatePinnedToCore(&net_cmd_task, "net_cmd_task",  3072, NULL, 1, &task_handle_cmd,  0);
-    	xTaskCreatePinnedToCore(&rsp_task, "rsp_task",  3072, NULL, 18, &task_handle_rsp,  0);
+    	xTaskCreatePinnedToCore(&rsp_task, "rsp_task",  2816, NULL, 19, &task_handle_rsp,  0);
     	xTaskCreatePinnedToCore(&lep_task, "lep_task",  2048, NULL, 19, &task_handle_lep,  1);
     }
 

@@ -47,7 +47,8 @@
 
 // Field lengths
 #define PS_SSID_MAX_LEN     32
-#define PS_PW_MAX_LEN       32
+#define PS_PW_MAX_LEN       63
+#define PS_OLD_PW_MAX_LEN   32
 
 
 

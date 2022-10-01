@@ -90,7 +90,7 @@ static char cam_info_string[JSON_MAX_RSP_TEXT_LEN];
 static char cmd_task_response_buffer[JSON_MAX_RSP_TEXT_LEN];
 
 // Firmware update control
-static char fw_update_version[UPD_MAX_VER_LEN];
+static char fw_update_version[UPD_MAX_VER_LEN+1];
 static int fw_update_state;
 static int fw_update_wait_timer;                // Counts down eval intervals waiting for some operation
 static int fw_req_length;
@@ -604,7 +604,7 @@ static bool cmd_response_available()
 
 
 /**
- * Load our cmd_task_response_buffer w and atomically update the command response buffer
+ * Load our cmd_task_response_buffer and atomically update the command response buffer
  * indicating we popped a response
  */
 static int get_cmd_response()

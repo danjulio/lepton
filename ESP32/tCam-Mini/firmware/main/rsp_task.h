@@ -44,7 +44,7 @@
 
 // Task evaluation interval
 #define RSP_TASK_EVAL_NORM_MSEC 50
-#define RSP_TASK_EVAL_FAST_MSEC 20
+#define RSP_TASK_EVAL_FAST_MSEC 10
 
 // Maximum send packet size (less than a MTU)
 #define RSP_MAX_TX_PKT_LEN 1280

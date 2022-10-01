@@ -12,7 +12,7 @@
  * Be sure to read the requirements about freeing allocated buffers or objects in
  * the function description.  Or BOOM.
  *
- * Copyright 2020-2021 Dan Julio
+ * Copyright 2020-2022 Dan Julio
  *
  * This file is part of tCam.
  *
@@ -306,7 +306,19 @@ char* json_get_status(uint32_t* len)
 		default:
 			model_field |= CAMERA_CAP_MASK_IF_WIFI;
 	}
-	model_field |= lepton_is_radiometric() ? CAMERA_CAP_MASK_RAD : CAMERA_CAP_MASK_NONRAD;
+	switch (lepton_get_model()) {
+		case LEP_TYPE_3_5:
+			model_field |= CAMERA_CAP_MASK_LEP3_5;
+			break;
+		case LEP_TYPE_3_0:
+			model_field |= CAMERA_CAP_MASK_LEP3_0;
+			break;
+		case LEP_TYPE_3_1:
+			model_field |= CAMERA_CAP_MASK_LEP3_1;
+			break;
+		default:
+			model_field |= CAMERA_CAP_MASK_LEP_UNK;
+	}
 	cJSON_AddNumberToObject(status, "Model", model_field);
 	
 	cJSON_AddStringToObject(status, "Version", app_desc->version);
@@ -1189,7 +1201,19 @@ static bool json_add_metadata_object(cJSON* parent)
 		default:
 			model_field |= CAMERA_CAP_MASK_IF_WIFI;
 	}
-	model_field |= lepton_is_radiometric() ? CAMERA_CAP_MASK_RAD : CAMERA_CAP_MASK_NONRAD;
+	switch (lepton_get_model()) {
+		case LEP_TYPE_3_5:
+			model_field |= CAMERA_CAP_MASK_LEP3_5;
+			break;
+		case LEP_TYPE_3_0:
+			model_field |= CAMERA_CAP_MASK_LEP3_0;
+			break;
+		case LEP_TYPE_3_1:
+			model_field |= CAMERA_CAP_MASK_LEP3_1;
+			break;
+		default:
+			model_field |= CAMERA_CAP_MASK_LEP_UNK;
+	}
 	cJSON_AddNumberToObject(meta, "Model", model_field);
 	
 	cJSON_AddStringToObject(meta, "Version", app_desc->version);

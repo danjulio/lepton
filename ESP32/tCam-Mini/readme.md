@@ -8,11 +8,21 @@ tCam-Mini was created using code from the tCam project and ended up being finish
 Revision 4 of the PCB, along with FW 2.0 and beyond, introduces a new hardware expansion port that can be used by an external micro-controller or single-board computer to communicate with tCam-Mini directly instead of using WiFi.  It also has an I2C expansion port that is currently unused, a USB-C connector and surface-mount LED.
 
 ### Firmware
-The "Firmware" directory contains a V4.0.2 Espressif ESP32 IDF project for tCam-Mini. You should be able to build and load it into a camera using the IDF commands (I still use "make program monitor").  There are also a set of precompiled binaries in the "precompiled" sub-directory.  You can use the Espressif tool and instructions found in the "programming" directory in parallel to this one to load those into a camera without having to build the project.
+The "Firmware" directory contains a V4.4.2 Espressif ESP32 IDF project for tCam-Mini. You should be able to build and load it into a camera using the IDF commands.  There are also a set of precompiled binaries in the "precompiled" sub-directory.  You can use the Espressif tool and instructions found in the "programming" directory in parallel to this one to load those into a camera without having to build the project.
 
 The precompiled firmware and Windows-based programming application can be downloaded directly from my [website](http://danjuliodesigns.com/products/tcam_mini.html) as well if you don't want to clone this entire repository.
 
 Cameras running FW 2.0 and beyond can also use the over-the-air update capability in the Desktop application to load new firmware files.
+
+This firmware also provides support for an ethernet interface using the built-in ESP32 MAC and an external PHY chip implemented with the tCam-POE PCB.  A GPIO pin is pulled low to indicate the firmware is running on the tCam-POE PCB.
+
+#### FW 3.1 (9/1/2022)
+FW revision 3.1 fixes issues and enhances Lepton support.
+
+ 1. Moved to Espressif IDF 4.4.2 (now using esp_netif, adjusted task priorities, stack size).
+ 2. Support 63 character WiFi passwords.
+ 3. Fixed bug with Lepton detection.
+ 4. Fixed bug where WiFi restart fails when setting client mode with static IP.
 
 #### FW 3.0 (8/6/2022)
 FW revision 3.0 is a major new release.  It is designed to run on tCam-Mini and tCam-POE PCBs with Revision 3 silicon and 8 MB Flash memory).
@@ -69,7 +79,7 @@ A dual-color (red/green) LED is used to communicate status.  Combinations of col
 |  | Hardware Interface Mode : Camera is ready for operation |
 | Fast Blink Yellow | WiFi Reset in progress |
 | Alternating Red/Green | Over-the-air FW update has been requested.  Press the button to initiate the update |
-| Blinking Green | FW update in process |
+| Blinking Green | FW update in process (blinking my occur at irregular intervals as the Flash memory is written) |
 | Series of Red Blinks | A fault has been detected.  The number of blinks indicate the fault type (see table below) |
 
 
@@ -198,8 +208,12 @@ The get_status response may include additional information for other camera mode
 | | 0 1 - Hardware Interface (Serial/SPI Interface) |
 | | 1 0 - Ethernet Interface (tCam-POE only) |
 | | 1 1 - Reserved |
-| 9 | Reserved - Read as 0 |
-| 8 | Non-radiometric Lepton installed (FW 2.0 and beyond) |
+| 11:10 | Reserved - Read as 0 |
+| 9:8 | Lepton Type (FW 3.1 and beyond) |
+| | 0 0 - Lepton 3.5 |
+| | 0 1 - Lepton 3.0 |
+| | 1 0 - Reserved |
+| | 1 1 - Reserved |
 | 7:0 | Camera Model Number - tCam-Mini reports 2 |
 
 #### get_image
@@ -405,7 +419,7 @@ The ```set_lep_cci``` command generates the following ```cam_info``` response.
   "args": {
     "c1": 79,
     "c2": 80,
-    "r1": 59
+    "r1": 59,
     "r2": 60
   }
 }
@@ -453,7 +467,7 @@ Streaming is a slightly special case for the command interface.  Responses are t
     "flags": 143,
     "ap_ip_addr": "192.168.4.1",
     "sta_ip_addr": "10.0.1.144",
-    "sta_netmask":"255.255.255.0"
+    "sta_netmask":"255.255.255.0",
     "cur_ip_addr": "10.0.1.144"
   }
 }
@@ -486,8 +500,8 @@ Password information is not sent as part of the wifi response.
 {
   "cmd": "set_wifi",
   "args": {
-    "ap_ssid": "ANewApName"
-    "ap_pw: "apassword"
+    "ap_ssid": "ANewApName",
+    "ap_pw: "apassword",
     "ap_ip_addr": "192.168.4.1",
     "flags": 145,
     "sta_ssid": "HomeNetwork",
@@ -502,12 +516,12 @@ Individual args values may be left out (for example to just set AP or Client (ST
 
 | set_wifi argument | Description |
 | --- | --- |
-| ap_ssid | Set the AP-mode SSID and also the camera name as reported in the metadata and status objects. |
-| ap_pw | Set the AP-mode password. |
+| ap_ssid | Set the AP-mode SSID and also the camera name as reported in the metadata and status objects (1-32 characters). |
+| ap_pw | Set the AP-mode password (8-63 characters). |
 | ap\_ip_addr | The camera's IP address when it is in AP mode. |
 | flags | Set WiFi configuration (see below). |
-| sta_ssid | Set the client-mode (STA) SSID. |
-| sta_pw | Set the client-mode (STA) password. |
+| sta_ssid | Set the client-mode (STA) SSID (1-32 characters). |
+| sta_pw | Set the client-mode (STA) password (8-63 characters). |
 | sta\_ip_addr | Set the static IP address to use when the camera as a client and configured to use a static IP. |
 | sta_netmask | Set the netmask to use when the camera as a client and configured to use a static IP. |
 
@@ -519,7 +533,7 @@ Only a subset of the flags argument are used to configure WiFi operation.  Other
 | 4 | Static IP - Set to 1 to use a Static IP, 0 to request an IP via DHCP when operating in Client mode. |
 | 0 | Bit 0: Wifi Enabled - Set to 1 to enable Wifi, 0 to disable Wifi. |
 
-The command will fail if an SSID is zero length or greater than 32 characters or if a password is less than 8 characters or greater than 32 characters.
+The command will fail if an SSID is zero length or greater than 32 characters or if a password is less than 8 characters or greater than 63 characters.
 
 Although I do not recommend it, use the following procedure to set a zero-length (null) password.
 

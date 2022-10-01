@@ -91,6 +91,19 @@ typedef struct {
 	uint8_t sta_netmask[4];
 } ps_net_info_t;
 
+// Previous version Stored Network Parameters (32 character max password)
+// Used to automatically update the NVS after an OTA firmware update
+typedef struct {
+	char ap_ssid[PS_SSID_MAX_LEN+1];
+	char sta_ssid[PS_SSID_MAX_LEN+1];
+	char ap_pw[PS_OLD_PW_MAX_LEN+1];
+	char sta_pw[PS_OLD_PW_MAX_LEN+1];
+	uint8_t flags;
+	uint8_t ap_ip_addr[4];
+	uint8_t sta_ip_addr[4];
+	uint8_t sta_netmask[4];
+} ps_old_net_info_t;
+
 
 
 //
@@ -129,6 +142,7 @@ static bool ps_write_lep_info();
 static bool ps_read_lep_info();
 static bool ps_write_net_info(int iface);
 static bool ps_read_net_info(int iface);
+static bool ps_read_old_net_info(int iface);
 static void ps_store_string(char* dst, char* src, uint8_t max_len);
 
 
@@ -214,7 +228,18 @@ bool ps_init(int brd, int iface)
 		ESP_LOGE(TAG, "NVS get_blob WiFi size failed with err %d", err);
 		return false;
 	}
-	if ((required_size == 0) || (required_size != sizeof(ps_net_info_t))) {
+	if (required_size == sizeof(ps_old_net_info_t)) {
+		ESP_LOGI(TAG, "Updating NVS WiFi info");
+		success &= ps_read_old_net_info(CTRL_IF_MODE_WIFI);
+		if (success) {
+			err = nvs_erase_key(ps_handle, wifi_info_key);
+			if (err != ESP_OK) {
+				ESP_LOGE(TAG, "NVS WiFi info erase failed with err %d", err);
+				// We'll try to write the new blob anyway...
+			}
+			success &= ps_write_net_info(CTRL_IF_MODE_WIFI);
+		}
+	} else if ((required_size == 0) || (required_size != sizeof(ps_net_info_t))) {
 		if (required_size == 0) {
 			ESP_LOGI(TAG, "Initializing NVS WiFi info");
 		} else {
@@ -234,7 +259,18 @@ bool ps_init(int brd, int iface)
 			ESP_LOGE(TAG, "NVS get_blob ethernet size failed with err %d", err);
 			return false;
 		}
-		if ((required_size == 0) || (required_size != sizeof(ps_net_info_t))) {
+		if (required_size == sizeof(ps_old_net_info_t)) {
+			ESP_LOGI(TAG, "Updating NVS ethernet info");
+			success &= ps_read_old_net_info(CTRL_IF_MODE_ETH);
+			if (success) {
+				err = nvs_erase_key(ps_handle, eth_info_key);
+				if (err != ESP_OK) {
+					ESP_LOGE(TAG, "NVS ethernet info erase failed with err %d", err);
+					// We'll try to write the new blob anyway...
+				}
+				success &= ps_write_net_info(CTRL_IF_MODE_ETH);
+			}
+		} else if ((required_size == 0) || (required_size != sizeof(ps_net_info_t))) {
 			if (required_size == 0) {
 				ESP_LOGI(TAG, "Initializing NVS ethernet info");
 			} else {
@@ -543,6 +579,50 @@ static bool ps_read_net_info(int iface)
 	if (required_size != sizeof(ps_net_info_t)) {
 		ESP_LOGE(TAG, "Get network info blob incorrect size %d (expected %d)", required_size, sizeof(ps_net_info_t));
 		return false;
+	}
+	
+	return true;
+}
+
+
+static bool ps_read_old_net_info(int iface)
+{
+	size_t required_size;
+	esp_err_t err;
+	ps_old_net_info_t old_info;
+	ps_net_info_t* new_infoP;
+	
+	// Read the old version sized blob
+	required_size = sizeof(ps_old_net_info_t);
+	if (iface == CTRL_IF_MODE_ETH) {
+		err = nvs_get_blob(ps_handle, eth_info_key, &old_info, &required_size);
+	} else {
+		err = nvs_get_blob(ps_handle, wifi_info_key, &old_info, &required_size);
+	}
+	if (err != ESP_OK) {
+		ESP_LOGE(TAG, "Get network old info blob failed with %d", err);
+		return false;
+	}
+	if (required_size != sizeof(ps_old_net_info_t)) {
+		ESP_LOGE(TAG, "Get network old info blob incorrect size %d (expected %d)", required_size, sizeof(ps_net_info_t));
+		return false;
+	}
+	
+	// Copy the old sized data into our current sized structure
+	if (iface == CTRL_IF_MODE_ETH) {
+		new_infoP = &ps_eth_info;
+	} else {
+		new_infoP = &ps_wifi_info;
+	}
+	strcpy(new_infoP->ap_ssid, old_info.ap_ssid);
+	strcpy(new_infoP->sta_ssid, old_info.sta_ssid);
+	strcpy(new_infoP->ap_pw, old_info.ap_pw);
+	strcpy(new_infoP->sta_pw, old_info.sta_pw);
+	new_infoP->flags = old_info.flags;
+	for (int i=0; i<4; i++) {
+		new_infoP->ap_ip_addr[i] = old_info.ap_ip_addr[i];
+		new_infoP->sta_ip_addr[i] = old_info.sta_ip_addr[i];
+		new_infoP->sta_netmask[i] = old_info.sta_netmask[i];
 	}
 	
 	return true;

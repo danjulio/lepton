@@ -149,12 +149,17 @@
 
 // Camera model number
 //  1. tCam Mini using the WiFi board is model 2
-//  3. tCam Mini using the Ethernet board is model 3
+//  2. tCam Mini using the Ethernet board is model 3
 #define CAMERA_MODEL_NUM_WIFI 2
 #define CAMERA_MODEL_NUM_ETH  3
 
 // tCam capabilities mask 
-//   Bit     8: Non-radiometric (set during run-time)
+//   Bit  7: 0: Camera model number
+//   Bit  9: 8: Lepton Type
+//        0  0 - Lepton 3.5
+//        0  1 - Lepton 3.0
+//        1  0 - Lepton 3.1
+//        1  1 - Reserved
 //   Bit 13:12: Interface Type
 //        0  0 - WiFi
 //        0  1 - Serial/SPI interface
@@ -167,8 +172,11 @@
 #define CAMERA_CAP_MASK_IF_WIFI 0x00000000
 #define CAMERA_CAP_MASK_IF_SIF  0x00001000
 #define CAMERA_CAP_MASK_IF_ETH  0x00002000
-#define CAMERA_CAP_MASK_RAD     0x00000000
-#define CAMERA_CAP_MASK_NONRAD  0x00000100
+#define CAMERA_CAP_MASK_LEP3_5  0x00000000
+#define CAMERA_CAP_MASK_LEP3_0  0x00000100
+#define CAMERA_CAP_MASK_LEP3_1  0x00000200
+#define CAMERA_CAP_MASK_LEP_UNK 0x00000300
+#define CAMERA_CAP_MASK_LEP_MSK 0x00000300
 
 
 // Image (Lepton + Telemetry + Metadata) json object text size
