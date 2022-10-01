@@ -19,32 +19,23 @@ Note: Zip files for each application platform can be downloaded directly from my
 #### Version History
 The latest version release notes are shown here.  Please see the ```release_notes.pdf``` file for notes from previous versions.
 
-Version 3.0.0
+Version 3.1.0
 
-1.	New IsoTherm palette
-2.	Added ability to change palettes by clicking the top or bottom of the color bar
-3.	Added support to identify new Ethernet camera model
-4.	Added Camera Info window (opened by new Camera->Camera Info... menu item)
-5.	Application no longer displays firmware version of connected camera in main window
-6.	Added new Discover function for bonjour discovery of cameras from Preferences Window
-7.	Wifi/Network Settings tab understands Ethernet camera model and disables irrelevant controls
-8.	Added Help window accessed through Application->Documentation menu
-9.	Added ability to check for updated application automatically at startup or from Application Menu
-10.	Added ability to check for new tcam/tCamMini firmware versions from Camera Menu based on connected camera type
-11.	Enabled close button on About window
-12.	Main Window toolbar connect button toggles between "Connect" and "Disconnect" captions
-13.	Improved error message when application can't connect to camera
-14.	Internal changes with window management in preparation for multi-camera sessions
-15.	Signed Mac version with Apple developer ID
+1.	Support 63 character WiFi passwords with all tCam firmware and tCam-Mini firmware 3.1 and beyond
+2. Disabled Graph when connected to a camera with a Lepton 3.0
+3. Display “RAW” and “AGC” in color palette bar when connected to a camera with a Lepton 3.0
+4. Worked around Xojo bug where pull-down menus didn't work properly in Linux builds (starting with
+version 3.0.0)
 
 #### Platform Caveats
 
-1. You may need to make the Linux application file executable.
-2. You may also have to authorize the application on OS X or Windows platforms since I don't yet sign it or package it for distribution in their online stores.
-3. Windows users may need to install support for Bonjour (mDNS) using the ```bonjoursdksetup.exe``` installer from Apple found here.
-4. Different Linux desktop systems render the toolbar differently and all toolbar items aren't visible since Linux renders the text next to the icon instead of beneath it.  You can make the window wider to expose some important controls like Stream that has sub-menus or you can use the pull-down menus at the top of the window.
-5. Linux users may need to install ```libwebkit2gtk``` to view the built-in documentation.
-6. The Raspberry Pi versions basically require a Pi 4 to display a stream at the full rate.  On slower Pi models the application may not be able to keep up and the controls may become unresponsive when streaming at the full ~9 FPS rate.
+1. The Mac version should now be signed and is delivered as a Universal installer package.  Let me know if you have any trouble.
+2. You may need to make the Linux application file executable.
+3. You may also have to authorize the application on the Windows platform since I don't yet package it for distribution in their online stores.
+4. Windows users may need to install support for Bonjour (mDNS) using the ```bonjoursdksetup.exe``` installer from Apple found here.
+5. Different Linux desktop systems render the toolbar differently and all toolbar items aren't visible since Linux renders the text next to the icon instead of beneath it.  You can make the window wider to expose some important controls like Stream that has sub-menus or you can use the pull-down menus at the top of the window.
+6. Linux users may need to install ```libwebkit2gtk``` to view the built-in documentation.
+7. The Raspberry Pi versions basically require a Pi 4 to display a stream at the full rate.  On slower Pi models the application may not be able to keep up and the controls may become unresponsive when streaming at the full ~9 FPS rate.
 
 An advance apology - I develop on my Mac and do quick tests on Windows 7 and 10, and Ubuntu, Kubuntu and Raspbian.  Although xojo provides pretty good cross-platform compatibility for OS X and Windows, sometimes there are issues with Linux.  If you find some other issue, please let me know and I'll try to fix it.
 
