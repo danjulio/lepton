@@ -1,3 +1,7 @@
+# Note
+
+As of Nov 6 2022, the ESP32 designs have been moved to their own respository [tCam](https://www.github.com/danjulio/tCam) to make it easier for most people who are only interested in those files.  Files here will no longer be updated.
+
 ## Simple tCam Web Server
 
 This repository contains a simple web server application for the tCam cameras.  It communicates with one or more cameras via a network connection and acts as web server for viewing images and configuring the system.

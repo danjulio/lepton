@@ -1,6 +1,10 @@
 ## ESP32-based Thermal Imaging Cameras
 tCam and tCam-Mini are two cameras I designed around the ESP32 and Lepton 3.5.  They are designed to provide easy access to radiometric data from the Lepton.  Radiometric data is useful because it contains temperature information for each pixel in the camera's image allowing for all kinds of data analysis even if the image is stored to a file.
 
+# Note
+
+As of Nov 6 2022, the ESP32 designs have been moved to their own respository [tCam](https://www.github.com/danjulio/tCam) to make it easier for most people who are only interested in those files.  Files here will no longer be updated.
+
 ### tCam
 tCam (still under development) is a full featured, battery powered camera with a local touchscreen display, local storage and a WiFi interface.
 

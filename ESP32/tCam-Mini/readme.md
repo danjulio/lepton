@@ -1,3 +1,7 @@
+# Note
+
+As of Nov 6 2022, the ESP32 designs have been moved to their own respository [tCam](https://www.github.com/danjulio/tCam) to make it easier for most people who are only interested in those files.  Files here will no longer be updated.
+
 ## tCam-Mini
 tCam-Mini was created using code from the tCam project and ended up being finished first.  It is a simple device, hardware-wise, consisting of an ESP32 WROVER module, USB UART for programming and debug, Lepton 3.0/3.5 and supporting voltage regulators and oscillator.
 
@@ -448,7 +452,7 @@ Column c1 should be less than or equal to c2.  Row r1 should be less than or equ
 | stream\_on argument | Description |
 | --- | --- |
 | delay_msec | Delay between images.  Set to 0 for fastest possible rate.  Set to a number greater than 250 to specify the delay between images in mSec. |
-| num_frames | Number of frames to send before ending the stream session.  Set to 0 for no limit (set\_stream_off must be send to end streaming). |
+| num_frames | Number of frames to send before ending the stream session.  Set to 0 for no limit (set\_stream_off must be sent to end streaming). |
 
 Streaming is a slightly special case for the command interface.  Responses are typically generated after receiving the associated get command.  However the image response is generated repeatedly by the camera after streaming has been enabled at the rate, and for the number of times, specified in the set\_stream\_on command.
 
