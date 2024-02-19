@@ -11,7 +11,7 @@ Contains code, design information and supporting applications for a pair of came
 
 # Note
 
-As of Nov 6 2022, the ESP32 designs have been moved to their own respository [tCam](https://www.github.com/danjulio/tCam) to make it easier for most people who are only interested in those files.  Files here will no longer be updated.
+As of Nov 6 2022, the ESP32 designs have been moved to their own repository [tCam](https://www.github.com/danjulio/tCam) to make it easier for most people who are only interested in those files.  Files here will no longer be updated.
 
 ### beaglebone
 Code for the Beaglebone Black including my initial PRU-based VoSPI video pipleline and LCD display.
